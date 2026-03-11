@@ -1,0 +1,21 @@
+<view class="container">
+  <view class="tip">删除后，该分类下的商品会变为「未分类」，仅在首页「全部」中显示。</view>
+  <view class="list" wx:if="{{list.length > 0}}">
+    <view class="item" wx:for="{{list}}" wx:key="_id">
+      <text class="name">{{item.name}}</text>
+      <button
+        class="btn-del"
+        size="mini"
+        data-id="{{item._id}}"
+        data-name="{{item.name}}"
+        bindtap="onDelete"
+        loading="{{deletingId === item._id}}"
+        disabled="{{deletingId !== null}}"
+      >删除</button>
+    </view>
+  </view>
+  <view class="empty" wx:elif="{{!loading}}">
+    <text>暂无分类，可在「新增商品」页自定义大类</text>
+  </view>
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>

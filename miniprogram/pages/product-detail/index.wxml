@@ -44,6 +44,7 @@
     </view>
   </view>
   <view class="footer">
+    <button class="edit-btn" type="primary" bindtap="onEdit">编辑</button>
     <button
       class="delete-btn"
       type="warn"

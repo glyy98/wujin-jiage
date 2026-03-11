@@ -1,70 +1,53 @@
-// index.js - 五金店商品查询
-const MOCK_PRODUCTS = [
-  {
-    id: "1",
-    name: "镀锌六角螺栓 M8×40",
-    spec: "M8×40 镀锌",
-    supplier: "华南五金批发",
-    costPrice: "0.35",
-    salePrice: "0.68",
-    image: "",
-  },
-  {
-    id: "2",
-    name: "膨胀螺丝 M6×40",
-    spec: "M6×40 不锈钢",
-    supplier: "华东紧固件",
-    costPrice: "0.28",
-    salePrice: "0.55",
-    image: "",
-  },
-  {
-    id: "3",
-    name: "十字自攻螺丝 4.2×19",
-    spec: "4.2×19 黑磷",
-    supplier: "华南五金批发",
-    costPrice: "0.02",
-    salePrice: "0.05",
-    image: "",
-  },
-  {
-    id: "4",
-    name: "角码 40×40×2.0",
-    spec: "40×40 厚2.0mm",
-    supplier: "广东型材厂",
-    costPrice: "1.20",
-    salePrice: "2.50",
-    image: "",
-  },
-  {
-    id: "5",
-    name: "合页 不锈钢 3寸",
-    spec: "3寸 不锈钢",
-    supplier: "浙江五金",
-    costPrice: "3.80",
-    salePrice: "7.50",
-    image: "",
-  },
-];
+// index.js - 左侧大类树 + 右侧该大类下商品明细
+const DB = wx.cloud.database();
+const GOODS = DB.collection("goods");
+
+// 一级大类占位：未选或「全部」
+const ALL_ID = "";
 
 Page({
   data: {
     keyword: "",
+    categoryList: [{ id: ALL_ID, name: "全部" }],
+    selectedCategoryId: ALL_ID,
     productList: [],
-    allProducts: [],
+    allProductsInCategory: [],
     loading: true,
   },
 
-  onLoad() {
-    this.loadList();
+  onLoad() {},
+
+  onShow() {
+    this.loadCategories();
+    this.loadGoods(this.data.selectedCategoryId);
   },
 
-  loadList() {
-    this.setData({ loading: true });
+  // 加载左侧一级大类（树根），走云函数以自动创建 categories 集合
+  loadCategories() {
     wx.cloud
-      .database()
-      .collection("goods")
-      .limit(100)
+      .callFunction({ name: "quickstartFunctions", data: { type: "getCategories" } })
+      .then((res) => {
+        const result = res.result || {};
+        const raw = result.list || [];
+        const list = raw.map((c) => ({ id: c._id, name: c.name || "" }));
+        this.setData({
+          categoryList: [{ id: ALL_ID, name: "全部" }, ...list],
+        });
+      })
+      .catch((err) => {
+        console.warn("加载分类失败，仅显示「全部」", err);
+        this.setData({ categoryList: [{ id: ALL_ID, name: "全部" }] });
+      });
+  },
+
+  // 按大类加载商品：空为全部，否则按 categoryL1Id 筛选
+  loadGoods(categoryL1Id) {
+    this.setData({ loading: true });
+    let query = GOODS.limit(200);
+    if (categoryL1Id) {
+      query = query.where({ categoryL1Id });
+    }
+    query
       .get()
       .then((res) => {
         const data = (res.data || []).map((item) => ({
@@ -74,58 +57,64 @@ Page({
         const app = getApp();
         app.globalData.productList = data;
         this.setData({
-          allProducts: data,
-          productList: data,
+          allProductsInCategory: data,
+          productList: this.filterByKeyword(data, this.data.keyword),
           loading: false,
         });
       })
       .catch((err) => {
         console.error("加载商品失败", err);
-        this.setData({ loading: false });
-        wx.showToast({
-          title: err.message || "加载失败",
-          icon: "none",
+        this.setData({
+          allProductsInCategory: [],
+          productList: [],
+          loading: false,
         });
+        wx.showToast({ title: err.message || "加载失败", icon: "none" });
       });
   },
 
+  filterByKeyword(list, keyword) {
+    const k = (keyword || "").trim().toLowerCase();
+    if (!k) return list;
+    return list.filter(
+      (p) =>
+        (p.name && p.name.toLowerCase().includes(k)) ||
+        (p.spec && p.spec.toLowerCase().includes(k)) ||
+        (p.supplier && p.supplier.toLowerCase().includes(k))
+    );
+  },
+
+  onSelectCategory(e) {
+    const id = e.currentTarget.dataset.id;
+    this.setData({ selectedCategoryId: id });
+    this.loadGoods(id);
+  },
+
   onSearchInput(e) {
-    this.setData({
-      keyword: e.detail.value,
-    });
+    this.setData({ keyword: e.detail.value });
   },
 
   onSearch() {
-    const keyword = (this.data.keyword || "").trim().toLowerCase();
-    const list = keyword
-      ? this.data.allProducts.filter(
-          (p) =>
-            (p.name && p.name.toLowerCase().includes(keyword)) ||
-            (p.spec && p.spec.toLowerCase().includes(keyword)) ||
-            (p.supplier && p.supplier.toLowerCase().includes(keyword))
-        )
-      : this.data.allProducts;
+    const { allProductsInCategory, keyword } = this.data;
     this.setData({
-      productList: list,
+      productList: this.filterByKeyword(allProductsInCategory, keyword),
     });
   },
 
   goDetail(e) {
     const id = e.currentTarget.dataset.id;
-    wx.navigateTo({
-      url: `/pages/product-detail/index?id=${id}`,
-    });
+    wx.navigateTo({ url: `/pages/product-detail/index?id=${id}` });
   },
 
   goAddGoods() {
-    wx.navigateTo({
-      url: "/pages/addGoods/addGoods",
-    });
+    wx.navigateTo({ url: "/pages/addGoods/addGoods" });
   },
 
   goGoodsList() {
-    wx.navigateTo({
-      url: "/pages/goodsList/goodsList",
-    });
+    wx.navigateTo({ url: "/pages/goodsList/goodsList" });
+  },
+
+  goCategoryManage() {
+    wx.navigateTo({ url: "/pages/categoryManage/categoryManage" });
   },
 });

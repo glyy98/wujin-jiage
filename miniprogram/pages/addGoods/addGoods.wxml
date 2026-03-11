@@ -2,6 +2,24 @@
 <view class="container">
   <view class="form-card">
     <view class="form-item">
+      <text class="label">所属大类</text>
+      <view class="cat-row">
+        <picker mode="selector" range="{{categoryList}}" range-key="name" value="{{categoryIndex}}" bindchange="onCategoryChange">
+          <view class="picker">{{categoryList.length ? categoryList[categoryIndex].name : '请选择或下方自定义'}}</view>
+        </picker>
+        <navigator class="link-manage" url="/pages/categoryManage/categoryManage">管理分类</navigator>
+      </view>
+      <view class="custom-cat">
+        <input
+          class="input custom-cat-input"
+          placeholder="没有合适的大类？输入新大类名称"
+          value="{{newCategoryName}}"
+          bindinput="onNewCategoryInput"
+        />
+        <button class="custom-cat-btn" size="mini" type="default" bindtap="onAddCategory" disabled="{{addingCategory}}">添加并选用</button>
+      </view>
+    </view>
+    <view class="form-item">
       <text class="label">商品名称</text>
       <input
         class="input"

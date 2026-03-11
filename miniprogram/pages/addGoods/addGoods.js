@@ -1,16 +1,68 @@
 // addGoods/addGoods.js - 新增五金商品，保存到云数据库 goods
 const MAX_IMAGES = 5;
 const SIZE_LIMIT = 3 * 1024 * 1024; // 3M
+const db = wx.cloud.database();
 
 Page({
   data: {
+    editId: "",
+    categoryList: [],
+    categoryIndex: 0,
+    newCategoryName: "",
+    addingCategory: false,
     name: "",
     spec: "",
     supplier: "",
     costPrice: "",
     salePrice: "",
-    imageList: [], // 已上传的图片 fileID 列表
+    imageList: [],
     saving: false,
+  },
+
+  onLoad(options) {
+    const editId = (options.id || "").trim();
+    this.setData({ editId });
+    if (editId) {
+      wx.setNavigationBarTitle({ title: "编辑商品" });
+    }
+    wx.cloud
+      .callFunction({ name: "quickstartFunctions", data: { type: "getCategories" } })
+      .then((res) => {
+        const result = res.result || {};
+        const list = result.list || [];
+        this.setData({ categoryList: list });
+        if (editId) this.loadProduct(editId, list);
+      })
+      .catch(() => {
+        this.setData({ categoryList: [] });
+        if (editId) this.loadProduct(editId, []);
+      });
+  },
+
+  loadProduct(id, categoryList) {
+    db.collection("goods")
+      .doc(id)
+      .get()
+      .then((res) => {
+        const p = res.data;
+        if (!p) return;
+        const list = categoryList.length ? categoryList : this.data.categoryList;
+        let categoryIndex = 0;
+        if (p.categoryL1Id && list.length) {
+          const i = list.findIndex((c) => c._id === p.categoryL1Id);
+          if (i >= 0) categoryIndex = i;
+        }
+        this.setData({
+          name: p.name || "",
+          spec: p.spec || "",
+          supplier: p.supplier || "",
+          costPrice: p.costPrice || "",
+          salePrice: p.salePrice || "",
+          imageList: p.images || (p.image ? [p.image] : []),
+          categoryIndex,
+        });
+      })
+      .catch(() => {});
   },
 
   onNameInput(e) {
@@ -97,46 +149,116 @@ Page({
     this.setData({ imageList });
   },
 
+  onCategoryChange(e) {
+    this.setData({ categoryIndex: parseInt(e.detail.value, 10) });
+  },
+
+  onNewCategoryInput(e) {
+    this.setData({ newCategoryName: e.detail.value });
+  },
+
+  // 自定义新大类：调用云函数添加，并加入列表、自动选用
+  onAddCategory() {
+    const name = (this.data.newCategoryName || "").trim();
+    if (!name) {
+      wx.showToast({ title: "请输入新大类名称", icon: "none" });
+      return;
+    }
+    this.setData({ addingCategory: true });
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: { type: "addCategory", name },
+      })
+      .then((res) => {
+        const result = (res.result || {});
+        if (!result.success) {
+          wx.showToast({ title: result.errMsg || "添加失败", icon: "none" });
+          this.setData({ addingCategory: false });
+          return;
+        }
+        const newCat = { _id: result.id, name: result.name };
+        const list = [...this.data.categoryList, newCat];
+        this.setData({
+          categoryList: list,
+          categoryIndex: list.length - 1,
+          newCategoryName: "",
+          addingCategory: false,
+        });
+        wx.showToast({ title: result.message || "已添加并选用", icon: "success" });
+      })
+      .catch((err) => {
+        console.error("addCategory fail", err);
+        this.setData({ addingCategory: false });
+        const msg = (err.errMsg || err.message || "添加失败").replace(/^request:fail\s*/i, "");
+        wx.showToast({ title: msg.length > 20 ? "添加失败，请检查网络与云函数" : msg, icon: "none", duration: 2500 });
+      });
+  },
+
   onSave() {
-    const { name, spec, supplier, costPrice, salePrice, imageList } = this.data;
+    const { editId, name, spec, supplier, costPrice, salePrice, imageList, categoryList, categoryIndex } = this.data;
     if (!name || !name.trim()) {
       wx.showToast({ title: "请输入商品名称", icon: "none" });
       return;
     }
+    const cat = categoryList[categoryIndex];
+    const categoryL1Id = cat ? cat._id : "";
+    const categoryName = cat ? cat.name : "";
     this.setData({ saving: true });
-    const db = wx.cloud.database();
-    db.collection("goods")
-      .add({
-        data: {
-          name: (name || "").trim(),
-          spec: (spec || "").trim(),
-          supplier: (supplier || "").trim(),
-          costPrice: (costPrice || "").trim(),
-          salePrice: (salePrice || "").trim(),
-          images: imageList || [],
-          image: (imageList && imageList[0]) || "", // 首图，列表/详情兼容
-          createTime: db.serverDate(),
-        },
-      })
-      .then(() => {
-        this.setData({ saving: false });
-        wx.showToast({ title: "保存成功", icon: "success" });
-        this.setData({
-          name: "",
-          spec: "",
-          supplier: "",
-          costPrice: "",
-          salePrice: "",
-          imageList: [],
+    const payload = {
+      categoryL1Id,
+      categoryName,
+      name: (name || "").trim(),
+      spec: (spec || "").trim(),
+      supplier: (supplier || "").trim(),
+      costPrice: (costPrice || "").trim(),
+      salePrice: (salePrice || "").trim(),
+      images: imageList || [],
+      image: (imageList && imageList[0]) || "",
+    };
+    if (editId) {
+      db.collection("goods")
+        .doc(editId)
+        .update({ data: payload })
+        .then(() => {
+          this.setData({ saving: false });
+          wx.showToast({ title: "保存成功", icon: "success" });
+          setTimeout(() => wx.navigateBack(), 400);
+        })
+        .catch((err) => {
+          this.setData({ saving: false });
+          console.error("保存失败", err);
+          wx.showToast({ title: err.message || "保存失败", icon: "none" });
         });
-      })
-      .catch((err) => {
-        this.setData({ saving: false });
-        console.error("保存失败", err);
-        wx.showToast({
-          title: err.message || "保存失败",
-          icon: "none",
+    } else {
+      db.collection("goods")
+        .add({
+          data: {
+            ...payload,
+            createTime: db.serverDate(),
+          },
+        })
+        .then(() => {
+          this.setData({ saving: false });
+          wx.showToast({ title: "保存成功", icon: "success" });
+          this.setData({
+            categoryIndex: 0,
+            name: "",
+            spec: "",
+            supplier: "",
+            costPrice: "",
+            salePrice: "",
+            imageList: [],
+          });
+        })
+        .catch((err) => {
+          this.setData({ saving: false });
+          console.error("保存失败", err);
+          wx.showToast({
+            title: err.message || "保存失败",
+            icon: "none",
+          });
         });
-      });
+    }
   },
 });

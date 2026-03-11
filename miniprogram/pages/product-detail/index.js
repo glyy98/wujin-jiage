@@ -1,12 +1,16 @@
 // product-detail/index.js - 商品详情
+const db = wx.cloud.database();
+
 Page({
   data: {
     product: null,
+    productId: "",
     deleting: false,
   },
 
   onLoad(options) {
-    const id = options.id;
+    const id = options.id || "";
+    this.setData({ productId: id });
     const app = getApp();
     const list = app.globalData.productList || [];
     const product = list.find((p) => p.id === id || p._id === id) || null;
@@ -16,6 +20,38 @@ Page({
         title: product.name || "商品详情",
       });
     }
+  },
+
+  onShow() {
+    const id = this.data.productId;
+    if (id) this.loadProduct(id);
+  },
+
+  loadProduct(id) {
+    db.collection("goods")
+      .doc(id)
+      .get()
+      .then((res) => {
+        const data = res.data;
+        if (!data) {
+          this.setData({ product: null });
+          return;
+        }
+        const product = { ...data, id: data._id };
+        this.setData({ product });
+        wx.setNavigationBarTitle({ title: product.name || "商品详情" });
+      })
+      .catch(() => {
+        this.setData({ product: null });
+      });
+  },
+
+  onEdit() {
+    const id = this.data.product && (this.data.product._id || this.data.product.id);
+    if (!id) return;
+    wx.navigateTo({
+      url: "/pages/addGoods/addGoods?id=" + id,
+    });
   },
 
   onDelete() {
