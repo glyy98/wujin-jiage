@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 云函数依赖（各云函数目录下的 node_modules）
+cloudfunctions/**/node_modules/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.suo
+*.user
+
+# 微信开发者工具
+project.private.config.json
+
+# 环境/密钥（若把 env 放到单独文件可取消注释）
+# .env
+# .env.local

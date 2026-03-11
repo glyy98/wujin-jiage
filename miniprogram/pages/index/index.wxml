@@ -1,0 +1,57 @@
+<!--index.wxml - 五金店商品查询-->
+<view class="container">
+  <view class="header">
+    <view class="page-title">商品价格查询</view>
+    <view class="search-bar">
+      <input
+        class="search-input"
+        placeholder="输入商品名称或规格搜索"
+        value="{{keyword}}"
+        bindinput="onSearchInput"
+        bindconfirm="onSearch"
+        focus="{{false}}"
+      />
+      <view class="search-btn" bindtap="onSearch">搜索</view>
+    </view>
+    <view class="action-bar">
+      <button class="action-btn primary" size="mini" bindtap="goAddGoods">新增商品</button>
+      <button class="action-btn" size="mini" bindtap="goGoodsList">商品列表</button>
+    </view>
+  </view>
+
+  <view class="product-list" wx:if="{{productList.length > 0}}">
+    <view
+      class="product-item"
+      wx:for="{{productList}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="goDetail"
+    >
+      <view class="product-cover">
+        <image
+          wx:if="{{item.image}}"
+          class="product-img"
+          src="{{item.image}}"
+          mode="aspectFill"
+        />
+        <view wx:else class="product-img product-img-placeholder">暂无图片</view>
+      </view>
+      <view class="product-info">
+        <view class="product-name">{{item.name}}</view>
+        <view class="product-spec" wx:if="{{item.spec}}">规格：{{item.spec}}</view>
+        <view class="product-supplier" wx:if="{{item.supplier}}">供应商：{{item.supplier}}</view>
+        <view class="product-prices">
+          <text class="price-label">售价</text>
+          <text class="price-sale">¥{{item.salePrice}}</text>
+          <text class="price-cost">来货价 ¥{{item.costPrice}}</text>
+        </view>
+      </view>
+      <image class="arrow" src="../../images/arrow.svg" mode="aspectFit" />
+    </view>
+  </view>
+
+  <view class="empty" wx:elif="{{!loading}}">
+    <view class="empty-text">{{keyword ? "未找到相关商品" : "暂无商品数据"}}</view>
+  </view>
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>

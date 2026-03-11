@@ -1,0 +1,28 @@
+<!--goodsList/goodsList.wxml - 商品列表，从云数据库 goods 读取-->
+<view class="container">
+  <view class="product-list" wx:if="{{list.length > 0}}">
+    <view class="product-item" wx:for="{{list}}" wx:key="_id">
+      <view class="product-cover">
+        <image
+          wx:if="{{item.image}}"
+          class="product-img"
+          src="{{item.image}}"
+          mode="aspectFill"
+        />
+        <view wx:else class="product-img product-img-placeholder">暂无图片</view>
+      </view>
+      <view class="product-info">
+        <view class="product-name">{{item.name}}</view>
+        <view class="product-spec" wx:if="{{item.spec}}">规格：{{item.spec}}</view>
+        <view class="product-supplier" wx:if="{{item.supplier}}">供应商：{{item.supplier}}</view>
+        <view class="product-prices">
+          <text class="price-label">售价</text>
+          <text class="price-sale">¥{{item.salePrice || '—'}}</text>
+          <text class="price-cost" wx:if="{{item.costPrice}}">来货价 ¥{{item.costPrice}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+  <view class="empty" wx:elif="{{!loading}}">暂无商品</view>
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+</view>
