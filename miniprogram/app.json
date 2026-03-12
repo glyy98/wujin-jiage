@@ -10,7 +10,7 @@
     "backgroundColor": "#F6F6F6",
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#F6F6F6",
-    "navigationBarTitleText": "商品查询",
+    "navigationBarTitleText": "金广业货物明细",
     "navigationBarTextStyle": "black"
   },
   "sitemapLocation": "sitemap.json",

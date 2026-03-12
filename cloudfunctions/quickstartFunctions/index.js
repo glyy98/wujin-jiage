@@ -266,6 +266,36 @@ const getCategories = async () => {
   }
 };
 
+// 编辑一级大类名称，并同步更新其下商品的 categoryName
+const updateCategory = async (event) => {
+  try {
+    const id = String(event.id || "").trim();
+    const name = String(event.name || "").trim();
+    if (!id) return { success: false, errMsg: "缺少分类 id" };
+    if (!name) return { success: false, errMsg: "分类名称不能为空" };
+    const col = db.collection("categories");
+    const doc = await col.doc(id).get();
+    if (!doc.data) return { success: false, errMsg: "分类不存在" };
+    if (doc.data.parentId !== "" && doc.data.parentId != null) {
+      return { success: false, errMsg: "仅支持编辑一级大类" };
+    }
+    await col.doc(id).update({ data: { name } });
+    const { data: goodsList } = await db.collection("goods").where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
+    const goodsCol = db.collection("goods");
+    for (const g of goodsList || []) {
+      try {
+        await goodsCol.doc(g._id).update({ data: { categoryName: name } });
+      } catch (e) {
+        console.error("update good categoryName fail", g._id, e);
+      }
+    }
+    return { success: true, message: "已更新" };
+  } catch (e) {
+    console.error("updateCategory error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
 // 删除一级大类：将该类下商品改为未分类，再删除分类
 const deleteCategory = async (event) => {
   try {
@@ -341,5 +371,7 @@ exports.main = async (event, context) => {
       return await getCategories();
     case "deleteCategory":
       return await deleteCategory(event);
+    case "updateCategory":
+      return await updateCategory(event);
   }
 };

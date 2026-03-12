@@ -2,12 +2,36 @@
 Page({
   data: {
     list: [],
+    filteredList: [],
+    keyword: "",
     loading: true,
     deletingId: null,
+    showEditModal: false,
+    editId: "",
+    editName: "",
   },
 
   onLoad() {
     this.loadList();
+  },
+
+  onSearchInput(e) {
+    const keyword = (e.detail.value || "").trim();
+    this.setData({ keyword });
+    this.applyFilter(keyword);
+  },
+
+  onSearch() {
+    this.applyFilter(this.data.keyword);
+  },
+
+  applyFilter(keyword) {
+    const list = this.data.list;
+    const lower = (keyword || "").toLowerCase();
+    const filteredList = lower
+      ? list.filter((item) => (item.name || "").toLowerCase().includes(lower))
+      : list;
+    this.setData({ filteredList });
   },
 
   onShow() {
@@ -20,13 +44,64 @@ Page({
       .callFunction({ name: "quickstartFunctions", data: { type: "getCategories" } })
       .then((res) => {
         const result = res.result || {};
+        const list = result.list || [];
         this.setData({
-          list: result.list || [],
+          list,
           loading: false,
         });
+        this.applyFilter(this.data.keyword);
       })
       .catch(() => {
-        this.setData({ list: [], loading: false });
+        this.setData({ list: [], filteredList: [], loading: false });
+      });
+  },
+
+  onEdit(e) {
+    const id = e.currentTarget.dataset.id;
+    const name = e.currentTarget.dataset.name || "";
+    this.setData({
+      showEditModal: true,
+      editId: id,
+      editName: name,
+    });
+  },
+
+  onEditNameInput(e) {
+    this.setData({ editName: e.detail.value || "" });
+  },
+
+  closeEditModal() {
+    this.setData({
+      showEditModal: false,
+      editId: "",
+      editName: "",
+    });
+  },
+
+  submitEdit() {
+    const { editId, editName } = this.data;
+    const name = (editName || "").trim();
+    if (!name) {
+      wx.showToast({ title: "请输入分类名称", icon: "none" });
+      return;
+    }
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: { type: "updateCategory", id: editId, name },
+      })
+      .then((res) => {
+        const result = res.result || {};
+        if (result.success) {
+          this.closeEditModal();
+          wx.showToast({ title: result.message || "已更新", icon: "success" });
+          this.loadList();
+        } else {
+          wx.showToast({ title: result.errMsg || "更新失败", icon: "none" });
+        }
+      })
+      .catch((err) => {
+        wx.showToast({ title: err.message || "更新失败", icon: "none" });
       });
   },
 

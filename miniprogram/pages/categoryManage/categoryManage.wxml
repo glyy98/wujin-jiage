@@ -1,21 +1,63 @@
 <view class="container">
+  <view class="search-bar">
+    <input
+      class="search-input"
+      placeholder="搜索分类名称"
+      value="{{keyword}}"
+      bindinput="onSearchInput"
+      bindconfirm="onSearch"
+    />
+    <view class="search-btn" bindtap="onSearch">搜索</view>
+  </view>
   <view class="tip">删除后，该分类下的商品会变为「未分类」，仅在首页「全部」中显示。</view>
-  <view class="list" wx:if="{{list.length > 0}}">
-    <view class="item" wx:for="{{list}}" wx:key="_id">
-      <text class="name">{{item.name}}</text>
-      <button
-        class="btn-del"
-        size="mini"
-        data-id="{{item._id}}"
-        data-name="{{item.name}}"
-        bindtap="onDelete"
-        loading="{{deletingId === item._id}}"
-        disabled="{{deletingId !== null}}"
-      >删除</button>
+  <view class="list" wx:if="{{filteredList.length > 0}}">
+    <view class="item" wx:for="{{filteredList}}" wx:key="_id">
+      <view class="item-body">
+        <view class="item-label">分类名称</view>
+        <view class="name">{{item.name}}</view>
+      </view>
+      <view class="item-actions">
+        <button
+          class="btn-edit"
+          size="mini"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          bindtap="onEdit"
+          disabled="{{deletingId !== null}}"
+        >编辑</button>
+        <button
+          class="btn-del"
+          size="mini"
+          data-id="{{item._id}}"
+          data-name="{{item.name}}"
+          bindtap="onDelete"
+          loading="{{deletingId === item._id}}"
+          disabled="{{deletingId !== null}}"
+        >删除</button>
+      </view>
     </view>
   </view>
   <view class="empty" wx:elif="{{!loading}}">
-    <text>暂无分类，可在「新增商品」页自定义大类</text>
+    <text>{{keyword ? "未找到匹配的分类" : "暂无分类，可在「新增商品」页自定义大类"}}</text>
   </view>
   <view class="loading" wx:if="{{loading}}">加载中...</view>
+
+  <!-- 编辑分类弹窗 -->
+  <view class="modal-mask" wx:if="{{showEditModal}}" catchtap="closeEditModal"></view>
+  <view class="modal-wrap" wx:if="{{showEditModal}}">
+    <view class="modal-box">
+      <view class="modal-title">编辑分类</view>
+      <input
+        class="modal-input"
+        placeholder="请输入分类名称"
+        value="{{editName}}"
+        bindinput="onEditNameInput"
+        focus="{{showEditModal}}"
+      />
+      <view class="modal-btns">
+        <view class="modal-btn cancel" bindtap="closeEditModal">取消</view>
+        <view class="modal-btn confirm" bindtap="submitEdit">确定</view>
+      </view>
+    </view>
+  </view>
 </view>
