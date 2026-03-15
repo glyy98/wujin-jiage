@@ -5,7 +5,9 @@ page {
 
 .container {
   min-height: 100vh;
-  padding-bottom: 40rpx;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 24rpx 40rpx;
   font-family: PingFang SC, sans-serif;
 }
 
@@ -39,15 +41,20 @@ page {
 }
 
 .info-card {
-  margin: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 24rpx 0;
   background: #fff;
   border-radius: 16rpx;
-  padding: 32rpx 30rpx;
+  padding: 32rpx 24rpx;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
 }
 
 .footer {
-  margin: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
@@ -78,6 +85,79 @@ page {
 
 .row:last-child {
   border-bottom: none;
+}
+
+/* 多规格：规格块 + 点击后显示价格 */
+.spec-section {
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.spec-section-title {
+  display: block;
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 20rpx;
+}
+
+.spec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.spec-chip {
+  padding: 20rpx 32rpx;
+  font-size: 28rpx;
+  color: #333;
+  background: #f5f5f5;
+  border-radius: 12rpx;
+  border: 2rpx solid transparent;
+}
+
+.spec-chip.active {
+  background: #e8f2fe;
+  border-color: #1a5fb4;
+  color: #1a5fb4;
+  font-weight: 500;
+}
+
+.spec-price-panel {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  background: #f8f8f8;
+  border-radius: 12rpx;
+}
+
+.spec-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12rpx 0;
+}
+
+.spec-price-row:first-child {
+  padding-top: 0;
+}
+
+.spec-price-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.spec-price-value {
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.spec-price-value.cost {
+  color: #333;
+}
+
+.spec-price-value.sale {
+  color: #e54545;
+  font-weight: 600;
+  font-size: 34rpx;
 }
 
 .label {

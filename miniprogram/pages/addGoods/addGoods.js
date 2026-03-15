@@ -11,10 +11,10 @@ Page({
     newCategoryName: "",
     addingCategory: false,
     name: "",
-    spec: "",
-    supplier: "",
-    costPrice: "",
-    salePrice: "",
+    supplierOptions: ["请选择供应商"],
+    supplierList: [
+      { supplierName: "", supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "" }] },
+    ],
     imageList: [],
     saving: false,
   },
@@ -37,6 +37,35 @@ Page({
         this.setData({ categoryList: [] });
         if (editId) this.loadProduct(editId, []);
       });
+    this.refreshSupplierOptions();
+  },
+
+  onShow() {
+    this.refreshSupplierOptions();
+  },
+
+  refreshSupplierOptions() {
+    wx.cloud
+      .callFunction({ name: "quickstartFunctions", data: { type: "getSupplierNames" } })
+      .then((res) => {
+        const result = res.result || {};
+        const list = result.list || [];
+        let supplierOptions = list.length ? ["请选择供应商", ...list] : ["请选择供应商"];
+        const currentList = this.data.supplierList || [];
+        currentList.forEach((block) => {
+          const name = (block.supplierName || "").trim();
+          if (name && supplierOptions.indexOf(name) < 0) supplierOptions.push(name);
+        });
+        const supplierList = currentList.map((block) => {
+          const name = (block.supplierName || "").trim();
+          const supplierOptionIndex = name ? Math.max(0, supplierOptions.indexOf(name)) : 0;
+          return { ...block, supplierOptionIndex };
+        });
+        this.setData({ supplierOptions, supplierList });
+      })
+      .catch(() => {
+        this.setData({ supplierOptions: ["请选择供应商"] });
+      });
   },
 
   loadProduct(id, categoryList) {
@@ -52,12 +81,56 @@ Page({
           const i = list.findIndex((c) => c._id === p.categoryL1Id);
           if (i >= 0) categoryIndex = i;
         }
+        let supplierList = [];
+        if (p.supplierList && Array.isArray(p.supplierList) && p.supplierList.length > 0) {
+          supplierList = p.supplierList.map((sup) => ({
+            supplierName: (sup.supplierName ?? sup.supplier ?? "").toString().trim(),
+            skuList: (sup.skuList && Array.isArray(sup.skuList) ? sup.skuList : []).map((s) => ({
+              specName: (s.specName ?? s.spec ?? "").toString().trim(),
+              costPrice: (s.costPrice ?? "").toString().trim(),
+              salePrice: (s.salePrice ?? "").toString().trim(),
+            })),
+          }));
+        } else {
+          const skuList = p.skuList && Array.isArray(p.skuList) && p.skuList.length > 0
+            ? p.skuList.map((s) => ({
+                specName: (s.specName ?? s.spec ?? "").toString().trim(),
+                costPrice: (s.costPrice ?? "").toString().trim(),
+                salePrice: (s.salePrice ?? "").toString().trim(),
+              }))
+            : [{
+                specName: (p.spec || "").toString().trim(),
+                costPrice: (p.costPrice ?? "").toString().trim(),
+                salePrice: (p.salePrice ?? "").toString().trim(),
+              }];
+          supplierList = [
+            { supplierName: (p.supplier || "").toString().trim(), supplierOptionIndex: 0, skuList },
+          ];
+        }
+        supplierList = supplierList.filter((sup) => sup.skuList.length > 0 || sup.supplierName);
+        if (supplierList.length === 0) {
+          supplierList = [{ supplierName: "", supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "" }] }];
+        } else {
+          supplierList = supplierList.map((sup) => ({
+            ...sup,
+            skuList: sup.skuList.length ? sup.skuList : [{ specName: "", costPrice: "", salePrice: "" }],
+          }));
+        }
+        const supplierOptions = this.data.supplierOptions || ["请选择供应商"];
+        const merged = supplierOptions.slice();
+        supplierList.forEach((sup) => {
+          const name = (sup.supplierName || "").trim();
+          if (name && !merged.includes(name)) merged.push(name);
+        });
+        supplierList = supplierList.map((sup) => {
+          const name = (sup.supplierName || "").trim();
+          const idx = merged.indexOf(name);
+          return { ...sup, supplierOptionIndex: idx >= 0 ? idx : 0 };
+        });
         this.setData({
           name: p.name || "",
-          spec: p.spec || "",
-          supplier: p.supplier || "",
-          costPrice: p.costPrice || "",
-          salePrice: p.salePrice || "",
+          supplierOptions: merged,
+          supplierList,
           imageList: p.images || (p.image ? [p.image] : []),
           categoryIndex,
         });
@@ -68,17 +141,111 @@ Page({
   onNameInput(e) {
     this.setData({ name: e.detail.value });
   },
-  onSpecInput(e) {
-    this.setData({ spec: e.detail.value });
+  onSupplierPickerChange(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const idx = parseInt(e.detail.value, 10);
+    const supplierOptions = this.data.supplierOptions || [];
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si]) return;
+    const name = supplierOptions[idx];
+    const supplierName = (name === "请选择供应商" ? "" : name) || "";
+    supplierList[si] = { ...supplierList[si], supplierName, supplierOptionIndex: idx };
+    this.setData({ supplierList });
   },
-  onSupplierInput(e) {
-    this.setData({ supplier: e.detail.value });
+  onSupplierNameInput(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const val = e.detail.value || "";
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si]) return;
+    supplierList[si] = { ...supplierList[si], supplierName: val };
+    this.setData({ supplierList });
   },
-  onCostPriceInput(e) {
-    this.setData({ costPrice: e.detail.value });
+  onSupplierNameBlur(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const val = (e.detail.value || "").trim();
+    const supplierList = this.data.supplierList.slice();
+    const supplierOptions = this.data.supplierOptions || [];
+    if (!supplierList[si]) return;
+    if (!val) {
+      supplierList[si] = { ...supplierList[si], supplierOptionIndex: 0 };
+      this.setData({ supplierList });
+      return;
+    }
+    let merged = supplierOptions.slice();
+    if (!merged.includes(val)) merged.push(val);
+    const supplierOptionIndex = merged.indexOf(val);
+    supplierList[si] = { ...supplierList[si], supplierName: val, supplierOptionIndex };
+    this.setData({ supplierOptions: merged, supplierList });
+    // 持久化到 suppliers 集合，下次新增商品时筛选框会有该名称
+    wx.cloud.callFunction({
+      name: "quickstartFunctions",
+      data: { type: "addSupplierNames", names: [val] },
+    }).catch(() => {});
   },
-  onSalePriceInput(e) {
-    this.setData({ salePrice: e.detail.value });
+  onSkuSpecInput(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const skuIndex = parseInt(e.currentTarget.dataset.skuIndex, 10);
+    const val = e.detail.value || "";
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si] || !supplierList[si].skuList[skuIndex]) return;
+    const skuList = supplierList[si].skuList.slice();
+    skuList[skuIndex] = { ...skuList[skuIndex], specName: val };
+    supplierList[si] = { ...supplierList[si], skuList };
+    this.setData({ supplierList });
+  },
+  onSkuCostInput(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const skuIndex = parseInt(e.currentTarget.dataset.skuIndex, 10);
+    const val = e.detail.value || "";
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si] || !supplierList[si].skuList[skuIndex]) return;
+    const skuList = supplierList[si].skuList.slice();
+    skuList[skuIndex] = { ...skuList[skuIndex], costPrice: val };
+    supplierList[si] = { ...supplierList[si], skuList };
+    this.setData({ supplierList });
+  },
+  onSkuSaleInput(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const skuIndex = parseInt(e.currentTarget.dataset.skuIndex, 10);
+    const val = e.detail.value || "";
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si] || !supplierList[si].skuList[skuIndex]) return;
+    const skuList = supplierList[si].skuList.slice();
+    skuList[skuIndex] = { ...skuList[skuIndex], salePrice: val };
+    supplierList[si] = { ...supplierList[si], skuList };
+    this.setData({ supplierList });
+  },
+  onAddSku(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si]) return;
+    const skuList = (supplierList[si].skuList || []).concat([{ specName: "", costPrice: "", salePrice: "" }]);
+    supplierList[si] = { ...supplierList[si], skuList };
+    this.setData({ supplierList });
+  },
+  onAddSupplier() {
+    const supplierList = this.data.supplierList.concat([
+      { supplierName: "", supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "" }] },
+    ]);
+    this.setData({ supplierList });
+  },
+  onRemoveSku(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    const skuIndex = parseInt(e.currentTarget.dataset.skuIndex, 10);
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[si]) return;
+    let skuList = supplierList[si].skuList.filter((_, i) => i !== skuIndex);
+    if (skuList.length === 0) skuList = [{ specName: "", costPrice: "", salePrice: "" }];
+    supplierList[si] = { ...supplierList[si], skuList };
+    this.setData({ supplierList });
+  },
+  onRemoveSupplier(e) {
+    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
+    let supplierList = this.data.supplierList.filter((_, i) => i !== si);
+    if (supplierList.length === 0) {
+      supplierList = [{ supplierName: "", supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "" }] }];
+    }
+    this.setData({ supplierList });
   },
 
   onChooseImage() {
@@ -196,31 +363,60 @@ Page({
   },
 
   onSave() {
-    const { editId, name, spec, supplier, costPrice, salePrice, imageList, categoryList, categoryIndex } = this.data;
+    const { editId, name, supplierList, imageList, categoryList, categoryIndex } = this.data;
     if (!name || !name.trim()) {
       wx.showToast({ title: "请输入商品名称", icon: "none" });
+      return;
+    }
+    const list = (supplierList || [])
+      .map((sup) => ({
+        supplierName: (sup.supplierName || "").trim(),
+        skuList: (sup.skuList || []).map((s) => ({
+          specName: (s.specName || "").trim(),
+          costPrice: (s.costPrice || "").trim(),
+          salePrice: (s.salePrice || "").trim(),
+        })),
+      }))
+      .filter((sup) => {
+        const hasName = !!sup.supplierName;
+        const hasSku = (sup.skuList || []).some((s) => s.specName || s.costPrice || s.salePrice);
+        return hasName && hasSku;
+      });
+    if (list.length === 0) {
+      wx.showToast({ title: "请至少填写一个供应商名称及该供应商下的一行规格", icon: "none" });
       return;
     }
     const cat = categoryList[categoryIndex];
     const categoryL1Id = cat ? cat._id : "";
     const categoryName = cat ? cat.name : "";
+    const firstSup = list[0];
+    const firstSku = (firstSup.skuList && firstSup.skuList[0]) || {};
     this.setData({ saving: true });
     const payload = {
       categoryL1Id,
       categoryName,
       name: (name || "").trim(),
-      spec: (spec || "").trim(),
-      supplier: (supplier || "").trim(),
-      costPrice: (costPrice || "").trim(),
-      salePrice: (salePrice || "").trim(),
+      supplierList: list,
+      supplier: firstSup.supplierName,
+      spec: firstSku.specName,
+      costPrice: firstSku.costPrice,
+      salePrice: firstSku.salePrice,
       images: imageList || [],
       image: (imageList && imageList[0]) || "",
+    };
+    const supplierNamesToSave = list.map((sup) => sup.supplierName).filter(Boolean);
+    const afterSave = () => {
+      wx.cloud.callFunction({
+        name: "quickstartFunctions",
+        data: { type: "addSupplierNames", names: supplierNamesToSave },
+      }).catch(() => {});
     };
     if (editId) {
       db.collection("goods")
         .doc(editId)
         .update({ data: payload })
         .then(() => {
+          afterSave();
           this.setData({ saving: false });
           wx.showToast({ title: "保存成功", icon: "success" });
           setTimeout(() => wx.navigateBack(), 400);
@@ -239,15 +435,13 @@ Page({
           },
         })
         .then(() => {
+          afterSave();
           this.setData({ saving: false });
           wx.showToast({ title: "保存成功", icon: "success" });
           this.setData({
             categoryIndex: 0,
             name: "",
-            spec: "",
-            supplier: "",
-            costPrice: "",
-            salePrice: "",
+            supplierList: [{ supplierName: "", supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "" }] }],
             imageList: [],
           });
         })

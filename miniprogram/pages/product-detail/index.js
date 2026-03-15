@@ -6,6 +6,9 @@ Page({
     product: null,
     productId: "",
     deleting: false,
+    selectedSupplierIndex: 0,
+    selectedSkuIndex: 0,
+    currentSkuList: [],
   },
 
   onLoad(options) {
@@ -14,7 +17,16 @@ Page({
     const app = getApp();
     const list = app.globalData.productList || [];
     const product = list.find((p) => p.id === id || p._id === id) || null;
-    this.setData({ product });
+    const selectedSupplierIndex = 0;
+    let selectedSkuIndex = 0;
+    let currentSkuList = [];
+    if (product && product.supplierList && product.supplierList.length > 0) {
+      currentSkuList = product.supplierList[0].skuList || [];
+      selectedSkuIndex = currentSkuList.length > 0 ? 0 : -1;
+    } else if (product && product.skuList && product.skuList.length > 0) {
+      selectedSkuIndex = 0;
+    }
+    this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList });
     if (product) {
       wx.setNavigationBarTitle({
         title: product.name || "商品详情",
@@ -38,12 +50,39 @@ Page({
           return;
         }
         const product = { ...data, id: data._id };
-        this.setData({ product });
+        let selectedSupplierIndex = 0;
+        let selectedSkuIndex = 0;
+        let currentSkuList = [];
+        if (product.supplierList && product.supplierList.length > 0) {
+          currentSkuList = product.supplierList[0].skuList || [];
+          selectedSkuIndex = currentSkuList.length > 0 ? 0 : -1;
+        } else if (product.skuList && product.skuList.length > 0) {
+          selectedSkuIndex = 0;
+        }
+        this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList });
         wx.setNavigationBarTitle({ title: product.name || "商品详情" });
       })
       .catch(() => {
         this.setData({ product: null });
       });
+  },
+
+  onSelectSupplier(e) {
+    const index = parseInt(e.currentTarget.dataset.index, 10);
+    if (Number.isNaN(index) || index < 0) return;
+    const product = this.data.product;
+    const currentSkuList = (product.supplierList && product.supplierList[index]) ? (product.supplierList[index].skuList || []) : [];
+    this.setData({
+      selectedSupplierIndex: index,
+      selectedSkuIndex: 0,
+      currentSkuList,
+    });
+  },
+
+  onSelectSku(e) {
+    const index = parseInt(e.currentTarget.dataset.index, 10);
+    if (Number.isNaN(index) || index < 0) return;
+    this.setData({ selectedSkuIndex: index });
   },
 
   onEdit() {

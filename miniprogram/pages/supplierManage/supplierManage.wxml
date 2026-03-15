@@ -2,30 +2,22 @@
   <view class="search-bar">
     <input
       class="search-input"
-      placeholder="搜索分类名称"
+      placeholder="搜索供应商名称"
       value="{{keyword}}"
       bindinput="onSearchInput"
       bindconfirm="onSearch"
     />
     <view class="search-btn" bindtap="onSearch">搜索</view>
-    <view class="btn-add" bindtap="onAdd">新增分类</view>
+    <view class="btn-add" bindtap="onAdd">新增供应商</view>
   </view>
-  <view class="tip">删除后，该分类下的商品会变为「未分类」，仅在首页「全部」中显示。</view>
+  <view class="tip">此处仅管理「已保存的供应商」列表，删除后不影响已保存商品中的供应商名称；新增商品时仍可输入新供应商。</view>
   <view class="list" wx:if="{{filteredList.length > 0}}">
     <view class="item" wx:for="{{filteredList}}" wx:key="_id">
       <view class="item-body">
-        <view class="item-label">分类名称</view>
+        <view class="item-label">供应商名称</view>
         <view class="name">{{item.name}}</view>
       </view>
       <view class="item-actions">
-        <button
-          class="btn-edit"
-          size="mini"
-          data-id="{{item._id}}"
-          data-name="{{item.name}}"
-          bindtap="onEdit"
-          disabled="{{deletingId !== null}}"
-        >编辑</button>
         <button
           class="btn-del"
           size="mini"
@@ -39,37 +31,18 @@
     </view>
   </view>
   <view class="empty" wx:elif="{{!loading}}">
-    <text>{{keyword ? "未找到匹配的分类" : "暂无分类，点击上方「新增分类」添加"}}</text>
+    <text>{{keyword ? "未找到匹配的供应商" : "暂无已保存的供应商，可在新增商品时输入并保存"}}</text>
   </view>
   <view class="loading" wx:if="{{loading}}">加载中...</view>
 
-  <!-- 编辑分类弹窗 -->
-  <view class="modal-mask" wx:if="{{showEditModal}}" catchtap="closeEditModal"></view>
-  <view class="modal-wrap" wx:if="{{showEditModal}}">
-    <view class="modal-box">
-      <view class="modal-title">编辑分类</view>
-      <input
-        class="modal-input"
-        placeholder="请输入分类名称"
-        value="{{editName}}"
-        bindinput="onEditNameInput"
-        focus="{{showEditModal}}"
-      />
-      <view class="modal-btns">
-        <view class="modal-btn cancel" bindtap="closeEditModal">取消</view>
-        <view class="modal-btn confirm" bindtap="submitEdit">确定</view>
-      </view>
-    </view>
-  </view>
-
-  <!-- 新增分类弹窗 -->
+  <!-- 新增供应商弹窗 -->
   <view class="modal-mask" wx:if="{{showAddModal}}" catchtap="closeAddModal"></view>
   <view class="modal-wrap" wx:if="{{showAddModal}}">
     <view class="modal-box">
-      <view class="modal-title">新增分类</view>
+      <view class="modal-title">新增供应商</view>
       <input
         class="modal-input"
-        placeholder="请输入分类名称"
+        placeholder="请输入供应商名称"
         value="{{addName}}"
         bindinput="onAddNameInput"
         focus="{{showAddModal}}"

@@ -1,14 +1,18 @@
 <!--addGoods/addGoods.wxml - 新增五金商品-->
 <view class="container">
   <view class="form-card">
-    <view class="form-item">
+    <view class="form-item cat-filter-item">
       <text class="label">所属大类</text>
-      <view class="cat-row">
+      <view class="cat-filter-row">
         <picker mode="selector" range="{{categoryList}}" range-key="name" value="{{categoryIndex}}" bindchange="onCategoryChange">
-          <view class="picker">{{categoryList.length ? categoryList[categoryIndex].name : '请选择或下方自定义'}}</view>
+          <view class="cat-filter-box">
+            <text class="cat-filter-text {{categoryList.length && categoryList[categoryIndex] ? '' : 'placeholder'}}">{{categoryList.length && categoryList[categoryIndex] ? categoryList[categoryIndex].name : '请选择分类'}}</text>
+            <text class="cat-filter-arrow">▼</text>
+          </view>
         </picker>
         <navigator class="link-manage" url="/pages/categoryManage/categoryManage">管理分类</navigator>
       </view>
+      <view class="cat-filter-hint">请选择分类</view>
       <view class="custom-cat">
         <input
           class="input custom-cat-input"
@@ -28,43 +32,88 @@
         bindinput="onNameInput"
       />
     </view>
-    <view class="form-item">
-      <text class="label">规格</text>
-      <input
-        class="input"
-        placeholder="请输入规格"
-        value="{{spec}}"
-        bindinput="onSpecInput"
-      />
-    </view>
-    <view class="form-item">
-      <text class="label">供应商</text>
-      <input
-        class="input"
-        placeholder="请输入供应商"
-        value="{{supplier}}"
-        bindinput="onSupplierInput"
-      />
-    </view>
-    <view class="form-item">
-      <text class="label">来货价</text>
-      <input
-        class="input"
-        type="digit"
-        placeholder="请输入来货价"
-        value="{{costPrice}}"
-        bindinput="onCostPriceInput"
-      />
-    </view>
-    <view class="form-item">
-      <text class="label">售价</text>
-      <input
-        class="input"
-        type="digit"
-        placeholder="请输入售价"
-        value="{{salePrice}}"
-        bindinput="onSalePriceInput"
-      />
+    <view class="form-item supplier-section">
+      <view class="supplier-section-head">
+        <text class="label">供应商与规格</text>
+        <navigator class="link-manage" url="/pages/supplierManage/supplierManage">管理供应商</navigator>
+      </view>
+      <view class="supplier-blocks">
+        <view class="supplier-block" wx:for="{{supplierList}}" wx:for-index="supplierIndex" wx:key="supplierIndex">
+          <view class="supplier-block-head">
+            <picker
+              mode="selector"
+              range="{{supplierOptions}}"
+              value="{{item.supplierOptionIndex >= 0 && item.supplierOptionIndex < supplierOptions.length ? item.supplierOptionIndex : 0}}"
+              data-supplier-index="{{supplierIndex}}"
+              bindchange="onSupplierPickerChange"
+            >
+              <view class="supplier-filter-box">
+                <text class="supplier-filter-text {{item.supplierName ? '' : 'placeholder'}}">{{item.supplierName || '请选择供应商'}}</text>
+                <text class="supplier-filter-arrow">▼</text>
+              </view>
+            </picker>
+            <view
+              class="supplier-block-del"
+              data-supplier-index="{{supplierIndex}}"
+              bindtap="onRemoveSupplier"
+              wx:if="{{supplierList.length > 1}}"
+            >删除</view>
+          </view>
+          <view class="supplier-filter-hint">请选择供应商</view>
+          <view class="supplier-new-row">
+            <input
+              class="input supplier-new-input"
+              placeholder="或输入新供应商名称"
+              value="{{item.supplierName}}"
+              data-supplier-index="{{supplierIndex}}"
+              bindinput="onSupplierNameInput"
+              bindblur="onSupplierNameBlur"
+            />
+          </view>
+          <view class="sku-head">
+            <text class="label-inline">规格明细</text>
+            <view class="btn-add-sku" data-supplier-index="{{supplierIndex}}" bindtap="onAddSku">+ 添加规格</view>
+          </view>
+          <view class="sku-list">
+            <view class="sku-row" wx:for="{{item.skuList}}" wx:for-item="sku" wx:key="index">
+              <input
+                class="input sku-spec"
+                placeholder="规格名"
+                value="{{sku.specName}}"
+                data-supplier-index="{{supplierIndex}}"
+                data-sku-index="{{index}}"
+                bindinput="onSkuSpecInput"
+              />
+              <input
+                class="input sku-cost"
+                type="digit"
+                placeholder="来货价"
+                value="{{sku.costPrice}}"
+                data-supplier-index="{{supplierIndex}}"
+                data-sku-index="{{index}}"
+                bindinput="onSkuCostInput"
+              />
+              <input
+                class="input sku-sale"
+                type="digit"
+                placeholder="售价"
+                value="{{sku.salePrice}}"
+                data-supplier-index="{{supplierIndex}}"
+                data-sku-index="{{index}}"
+                bindinput="onSkuSaleInput"
+              />
+              <view
+                class="sku-del"
+                data-supplier-index="{{supplierIndex}}"
+                data-sku-index="{{index}}"
+                bindtap="onRemoveSku"
+                wx:if="{{item.skuList.length > 1}}"
+              >删除</view>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="btn-add-supplier" bindtap="onAddSupplier">+ 添加供应商</view>
     </view>
     <view class="form-item">
       <text class="label">商品图片</text>

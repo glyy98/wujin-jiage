@@ -6,13 +6,17 @@ page {
 
 .container {
   height: 100vh;
+  width: 100%;
   display: flex;
   flex-direction: column;
   font-family: PingFang SC, sans-serif;
+  box-sizing: border-box;
 }
 
 .header {
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
   background: linear-gradient(135deg, #1a5fb4 0%, #3584e4 100%);
   padding: 24rpx 24rpx 28rpx;
   color: #fff;
@@ -47,8 +51,11 @@ page {
 .main {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   display: flex;
   background: #f5f5f5;
+  box-sizing: border-box;
 }
 
 /* 左侧大类树 */
@@ -85,9 +92,11 @@ page {
 .content {
   flex: 1;
   min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
+  box-sizing: border-box;
 }
 
 .search-bar {
@@ -95,7 +104,7 @@ page {
   display: flex;
   align-items: center;
   background: #fff;
-  margin: 16rpx 16rpx 0;
+  margin: 24rpx 24rpx 0;
   padding: 0 20rpx;
   height: 72rpx;
   border-radius: 12rpx;
@@ -118,10 +127,21 @@ page {
 .product-scroll {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 撑满滚动内容宽度，无商品时左侧白条不往里缩 */
+.product-scroll-inner {
+  width: 100%;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 .product-list {
-  padding: 20rpx 16rpx 40rpx;
+  padding: 20rpx 24rpx 40rpx;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .product-item {
@@ -213,7 +233,9 @@ page {
 
 .empty,
 .loading {
-  padding: 80rpx 40rpx;
+  padding: 80rpx 24rpx;
+  width: 100%;
+  box-sizing: border-box;
   text-align: center;
   color: #999;
   font-size: 28rpx;

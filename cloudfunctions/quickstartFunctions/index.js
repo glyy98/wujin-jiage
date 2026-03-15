@@ -4,6 +4,7 @@ cloud.init({
 });
 
 const db = cloud.database();
+const XLSX = require("xlsx");
 
 // 确保 categories 集合存在（首次使用时创建，避免 -502005）
 const ensureCategoriesCollection = async () => {
@@ -11,6 +12,15 @@ const ensureCategoriesCollection = async () => {
     await db.createCollection("categories");
   } catch (e) {
     // 集合已存在时部分环境会报错，忽略后后续 get/add 仍可执行
+  }
+};
+
+// 确保 suppliers 集合存在（首次使用时创建，避免 -502005）
+const ensureSuppliersCollection = async () => {
+  try {
+    await db.createCollection("suppliers");
+  } catch (e) {
+    // 集合已存在时部分环境会报错，忽略
   }
 };
 
@@ -185,6 +195,29 @@ const deleteGoods = async (event) => {
   }
 };
 
+// 批量删除商品（仅删文档，不删云存储图片）
+const deleteGoodsBatch = async (event) => {
+  try {
+    const raw = event.ids || event.data?.ids || [];
+    const ids = Array.isArray(raw) ? raw.map((id) => (id != null ? String(id).trim() : "")).filter(Boolean) : [];
+    if (ids.length === 0) {
+      return { success: false, errMsg: "缺少商品 id 列表" };
+    }
+    const col = db.collection("goods");
+    for (const id of ids) {
+      try {
+        await col.doc(id).remove();
+      } catch (e) {
+        console.error("deleteGoodsBatch item error", id, e);
+      }
+    }
+    return { success: true, message: "已删除" };
+  } catch (e) {
+    console.error("deleteGoodsBatch error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
 // 初始化五金一级大类（左侧树状用），仅在没有数据时写入
 const INIT_L1_NAMES = [
   "紧固件",
@@ -222,6 +255,14 @@ const initCategories = async () => {
   }
 };
 
+// 分类名称唯一性校验（一级、不区分大小写）
+const isCategoryNameDuplicate = (list, name, excludeId) => {
+  const lower = (name || "").toLowerCase();
+  return (list || []).some(
+    (c) => (c._id !== excludeId) && ((c.name || "").toLowerCase() === lower)
+  );
+};
+
 // 新增一级大类（自定义分类），供新增商品时“添加并选用”
 const addCategory = async (event) => {
   try {
@@ -231,15 +272,19 @@ const addCategory = async (event) => {
     }
     await ensureCategoriesCollection();
     const col = db.collection("categories");
-    const { data: existing } = await col.where({ parentId: "", name }).limit(1).get();
-    if (existing && existing.length > 0) {
-      return { success: true, id: existing[0]._id, name: existing[0].name, message: "该分类已存在" };
+    const { data: list } = await col.where({ parentId: "" }).limit(500).get();
+    if (isCategoryNameDuplicate(list, name, null)) {
+      return { success: false, errMsg: "分类名称已存在" };
+    }
+    const existing = (list || []).find((c) => (c.name || "").trim() === name);
+    if (existing) {
+      return { success: true, id: existing._id, name: existing.name, message: "该分类已存在" };
     }
     // 不用 orderBy，避免未建索引时报错；改为拉取全部一级后取 max(order)
-    const { data: list } = await col.where({ parentId: "" }).limit(500).get();
+    const listForOrder = list || [];
     let nextOrder = 1;
-    if (list && list.length > 0) {
-      const maxOrder = Math.max(...list.map((c) => (c.order != null ? c.order : 0)));
+    if (listForOrder.length > 0) {
+      const maxOrder = Math.max(...listForOrder.map((c) => (c.order != null ? c.order : 0)));
       nextOrder = maxOrder + 1;
     }
     const { _id } = await col.add({
@@ -278,6 +323,10 @@ const updateCategory = async (event) => {
     if (!doc.data) return { success: false, errMsg: "分类不存在" };
     if (doc.data.parentId !== "" && doc.data.parentId != null) {
       return { success: false, errMsg: "仅支持编辑一级大类" };
+    }
+    const { data: list } = await col.where({ parentId: "" }).limit(500).get();
+    if (isCategoryNameDuplicate(list, name, id)) {
+      return { success: false, errMsg: "分类名称已存在" };
     }
     await col.doc(id).update({ data: { name } });
     const { data: goodsList } = await db.collection("goods").where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
@@ -337,6 +386,145 @@ const deleteCategory = async (event) => {
   }
 };
 
+// 从 goods 与 suppliers 集合合并去重得到供应商名称列表
+const getSupplierNames = async () => {
+  try {
+    const set = new Set();
+    const { data: goods } = await db.collection("goods").limit(500).get();
+    for (const g of goods || []) {
+      if (g.supplierList && Array.isArray(g.supplierList)) {
+        for (const sup of g.supplierList) {
+          const name = (sup.supplierName || sup.supplier || "").toString().trim();
+          if (name) set.add(name);
+        }
+      }
+      const legacy = (g.supplier || "").toString().trim();
+      if (legacy) set.add(legacy);
+    }
+    try {
+      await ensureSuppliersCollection();
+      const { data: suppList } = await db.collection("suppliers").limit(500).get();
+      for (const s of suppList || []) {
+        const name = (s.name || "").toString().trim();
+        if (name) set.add(name);
+      }
+    } catch (e) {
+      // 忽略
+    }
+    const list = Array.from(set).sort((a, b) => a.localeCompare(b, "zh"));
+    return { success: true, list };
+  } catch (e) {
+    console.error("getSupplierNames error", e);
+    return { success: false, errMsg: e.message || String(e), list: [] };
+  }
+};
+
+// 将供应商名称写入 suppliers 集合（去重），供筛选框持久化
+const addSupplierNames = async (event) => {
+  try {
+    const names = event.names || [];
+    if (!Array.isArray(names) || names.length === 0) return { success: true };
+    await ensureSuppliersCollection();
+    const col = db.collection("suppliers");
+    for (const raw of names) {
+      const name = (raw || "").toString().trim();
+      if (!name) continue;
+      const { data: existing } = await col.where({ name }).limit(1).get();
+      if (existing && existing.length > 0) continue;
+      await col.add({ data: { name } });
+    }
+    return { success: true };
+  } catch (e) {
+    console.error("addSupplierNames error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
+// 获取 suppliers 集合列表（供供应商管理页）
+const getSupplierList = async () => {
+  try {
+    await ensureSuppliersCollection();
+    const { data: raw } = await db.collection("suppliers").limit(500).get();
+    const list = (raw || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh"));
+    return { success: true, list };
+  } catch (e) {
+    if (e.errCode === -502005 || (e.message && e.message.includes("collection"))) {
+      return { success: true, list: [] };
+    }
+    console.error("getSupplierList error", e);
+    return { success: false, errMsg: e.message || String(e), list: [] };
+  }
+};
+
+// 删除一条供应商（仅从 suppliers 表移除，不影响已保存商品里的供应商名）
+const deleteSupplier = async (event) => {
+  try {
+    const id = (event.id || "").toString().trim();
+    if (!id) return { success: false, errMsg: "缺少 id" };
+    await db.collection("suppliers").doc(id).remove();
+    return { success: true, message: "已删除" };
+  } catch (e) {
+    console.error("deleteSupplier error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
+// 导出商品列表为 Excel，上传云存储后返回 fileID
+const exportGoods = async () => {
+  try {
+    const { data: goods } = await db.collection("goods").limit(500).get();
+    const rows = [];
+    for (const g of goods || []) {
+      const categoryName = g.categoryName || "";
+      const name = g.name || "";
+      if (g.supplierList && Array.isArray(g.supplierList) && g.supplierList.length > 0) {
+        for (const sup of g.supplierList) {
+          const supplierName = sup.supplierName || sup.supplier || "";
+          const skuList = sup.skuList && Array.isArray(sup.skuList) ? sup.skuList : [];
+          if (skuList.length === 0) {
+            rows.push({ 商品名称: name, 所属大类: categoryName, 供应商: supplierName, 规格: "", 来货价: "", 售价: "" });
+          } else {
+            for (const sku of skuList) {
+              rows.push({
+                商品名称: name,
+                所属大类: categoryName,
+                供应商: supplierName,
+                规格: sku.specName || sku.spec || "",
+                来货价: sku.costPrice ?? "",
+                售价: sku.salePrice ?? "",
+              });
+            }
+          }
+        }
+      } else {
+        rows.push({
+          商品名称: name,
+          所属大类: categoryName,
+          供应商: g.supplier || "",
+          规格: g.spec || "",
+          来货价: g.costPrice ?? "",
+          售价: g.salePrice ?? "",
+        });
+      }
+    }
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ 商品名称: "", 所属大类: "", 供应商: "", 规格: "", 来货价: "", 售价: "" }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "商品列表");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const now = new Date();
+    const timeStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") + "_" + String(now.getHours()).padStart(2, "0") + String(now.getMinutes()).padStart(2, "0");
+    const cloudPath = `exports/商品列表_${timeStr}.xlsx`;
+    const upload = await cloud.uploadFile({
+      cloudPath,
+      fileContent: buf,
+    });
+    return { success: true, fileID: upload.fileID };
+  } catch (e) {
+    console.error("exportGoods error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
 // const getOpenId = require('./getOpenId/index');
 // const getMiniProgramCode = require('./getMiniProgramCode/index');
 // const createCollection = require('./createCollection/index');
@@ -363,6 +551,8 @@ exports.main = async (event, context) => {
       return await deleteRecord(event);
     case "deleteGoods":
       return await deleteGoods(event);
+    case "deleteGoodsBatch":
+      return await deleteGoodsBatch(event);
     case "initCategories":
       return await initCategories();
     case "addCategory":
@@ -373,5 +563,17 @@ exports.main = async (event, context) => {
       return await deleteCategory(event);
     case "updateCategory":
       return await updateCategory(event);
+    case "exportGoods":
+      return await exportGoods();
+    case "getSupplierNames":
+      return await getSupplierNames();
+    case "addSupplierNames":
+      return await addSupplierNames(event);
+    case "getSupplierList":
+      return await getSupplierList();
+    case "deleteSupplier":
+      return await deleteSupplier(event);
+    default:
+      return null;
   }
 };

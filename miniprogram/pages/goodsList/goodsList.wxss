@@ -7,10 +7,108 @@ page {
   min-height: 100vh;
   padding: 24rpx;
   font-family: PingFang SC, sans-serif;
+  box-sizing: border-box;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.export-btn,
+.btn-select {
+  display: inline-block;
+  padding: 20rpx 32rpx;
+  font-size: 28rpx;
+  color: #fff;
+  background: #1a5fb4;
+  border-radius: 12rpx;
+}
+
+.export-btn[disabled],
+.btn-del-batch[disabled] {
+  opacity: 0.7;
+}
+
+.btn-select {
+  background: #fff;
+  color: #1a5fb4;
+  border: 2rpx solid #1a5fb4;
+}
+
+.select-toolbar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.btn-link {
+  font-size: 28rpx;
+  color: #1a5fb4;
+}
+
+.selected-count {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.btn-del-batch {
+  padding: 16rpx 28rpx;
+  font-size: 28rpx;
+  color: #fff;
+  background: #e54545;
+  border-radius: 12rpx;
+}
+
+.btn-cancel-select {
+  padding: 16rpx 28rpx;
+  font-size: 28rpx;
+  color: #666;
+}
+
+.product-item.selected {
+  background: #e8f2fe;
+  border: 3rpx solid #1a5fb4;
+  box-shadow: 0 2rpx 12rpx rgba(26, 95, 180, 0.2);
+}
+
+.product-item-check {
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+
+.check-icon {
+  width: 48rpx;
+  height: 48rpx;
+  border: 3rpx solid #ccc;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: transparent;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.check-icon.checked {
+  border-color: #1a5fb4;
+  background: #1a5fb4;
+  color: #fff;
 }
 
 .product-list {
-  padding: 0 0 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .product-item {
@@ -95,7 +193,9 @@ page {
 
 .empty,
 .loading {
-  padding: 80rpx 40rpx;
+  padding: 80rpx 0;
+  width: 100%;
+  box-sizing: border-box;
   text-align: center;
   color: #999;
   font-size: 28rpx;

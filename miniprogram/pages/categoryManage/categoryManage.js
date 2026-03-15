@@ -9,6 +9,8 @@ Page({
     showEditModal: false,
     editId: "",
     editName: "",
+    showAddModal: false,
+    addName: "",
   },
 
   onLoad() {
@@ -78,11 +80,68 @@ Page({
     });
   },
 
+  onAdd() {
+    this.setData({ showAddModal: true, addName: "" });
+  },
+
+  onAddNameInput(e) {
+    this.setData({ addName: e.detail.value || "" });
+  },
+
+  closeAddModal() {
+    this.setData({ showAddModal: false, addName: "" });
+  },
+
+  submitAdd() {
+    const { addName: rawName, list } = this.data;
+    const name = (rawName || "").trim();
+    if (!name) {
+      wx.showToast({ title: "请输入分类名称", icon: "none" });
+      return;
+    }
+    const nameLower = name.toLowerCase();
+    const duplicate = (list || []).some(
+      (item) => (item.name || "").toLowerCase() === nameLower
+    );
+    if (duplicate) {
+      wx.showToast({ title: "分类名称已存在", icon: "none" });
+      return;
+    }
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: { type: "addCategory", name },
+      })
+      .then((res) => {
+        const result = res.result || {};
+        if (result.success && result.id) {
+          this.closeAddModal();
+          wx.showToast({ title: "已添加", icon: "success" });
+          this.loadList();
+        } else if (result.success && result.message === "该分类已存在") {
+          wx.showToast({ title: "分类名称已存在", icon: "none" });
+        } else {
+          wx.showToast({ title: result.errMsg || "添加失败", icon: "none" });
+        }
+      })
+      .catch((err) => {
+        wx.showToast({ title: err.message || "添加失败", icon: "none" });
+      });
+  },
+
   submitEdit() {
-    const { editId, editName } = this.data;
+    const { editId, editName, list } = this.data;
     const name = (editName || "").trim();
     if (!name) {
       wx.showToast({ title: "请输入分类名称", icon: "none" });
+      return;
+    }
+    const nameLower = name.toLowerCase();
+    const duplicate = (list || []).some(
+      (item) => item._id !== editId && (item.name || "").toLowerCase() === nameLower
+    );
+    if (duplicate) {
+      wx.showToast({ title: "分类名称已存在", icon: "none" });
       return;
     }
     wx.cloud
