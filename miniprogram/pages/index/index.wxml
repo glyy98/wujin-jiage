@@ -36,6 +36,18 @@
         <view class="search-btn" bindtap="onSearch">搜索</view>
       </view>
 
+      <scroll-view wx:if="{{selectedCategoryId && subNavList.length > 0}}" class="sub-nav-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="sub-nav-inner">
+          <view
+            class="sub-chip {{selectedSubCategoryId === item.id ? 'active' : ''}}"
+            wx:for="{{subNavList}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="onSelectSubCategory"
+          >{{item.name}}</view>
+        </view>
+      </scroll-view>
+
       <scroll-view class="product-scroll" scroll-y enhanced show-scrollbar="{{false}}">
         <view class="product-scroll-inner">
           <view class="product-list" wx:if="{{productList.length > 0}}">

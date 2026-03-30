@@ -311,7 +311,56 @@ const getCategories = async () => {
   }
 };
 
-// 编辑一级大类名称，并同步更新其下商品的 categoryName
+// 一级 + 二级树：每个一级带 children 数组（parentId 为一级 _id）
+const getCategoriesTree = async () => {
+  try {
+    await ensureCategoriesCollection();
+    const col = db.collection("categories");
+    const { data: l1List } = await col.where({ parentId: "" }).limit(500).get();
+    const sorted = (l1List || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    const list = [];
+    for (const l1 of sorted) {
+      const { data: l2List } = await col.where({ parentId: l1._id }).limit(500).get();
+      const children = (l2List || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+      list.push({ ...l1, children });
+    }
+    return { success: true, list };
+  } catch (e) {
+    console.error("getCategoriesTree error", e);
+    return { success: false, errMsg: e.message || String(e), list: [] };
+  }
+};
+
+// 在某一级大类下新增二级分类
+const addSubCategory = async (event) => {
+  try {
+    const parentId = String(event.parentId || "").trim();
+    const name = String(event.name || "").trim();
+    if (!parentId || !name) {
+      return { success: false, errMsg: "请选择大类并输入子分类名称" };
+    }
+    await ensureCategoriesCollection();
+    const col = db.collection("categories");
+    const parent = await col.doc(parentId).get();
+    if (!parent.data || (parent.data.parentId !== "" && parent.data.parentId != null)) {
+      return { success: false, errMsg: "父级大类无效" };
+    }
+    const { data: siblings } = await col.where({ parentId }).limit(500).get();
+    if (isCategoryNameDuplicate(siblings, name, null)) {
+      return { success: false, errMsg: "该大类下已有同名子分类" };
+    }
+    const maxOrder = siblings.length ? Math.max(...siblings.map((c) => (c.order != null ? c.order : 0))) : 0;
+    const { _id } = await col.add({
+      data: { name, parentId, order: maxOrder + 1 },
+    });
+    return { success: true, id: _id, name };
+  } catch (e) {
+    console.error("addSubCategory error", e);
+    return { success: false, errMsg: e.message || String(e) };
+  }
+};
+
+// 编辑一级或二级分类名称，并同步更新商品上的 categoryName / categoryL2Name
 const updateCategory = async (event) => {
   try {
     const id = String(event.id || "").trim();
@@ -321,21 +370,36 @@ const updateCategory = async (event) => {
     const col = db.collection("categories");
     const doc = await col.doc(id).get();
     if (!doc.data) return { success: false, errMsg: "分类不存在" };
-    if (doc.data.parentId !== "" && doc.data.parentId != null) {
-      return { success: false, errMsg: "仅支持编辑一级大类" };
+    const goodsCol = db.collection("goods");
+    const isL1 = !doc.data.parentId || doc.data.parentId === "";
+    if (isL1) {
+      const { data: list } = await col.where({ parentId: "" }).limit(500).get();
+      if (isCategoryNameDuplicate(list, name, id)) {
+        return { success: false, errMsg: "分类名称已存在" };
+      }
+      await col.doc(id).update({ data: { name } });
+      const { data: goodsList } = await goodsCol.where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
+      for (const g of goodsList || []) {
+        try {
+          await goodsCol.doc(g._id).update({ data: { categoryName: name } });
+        } catch (e) {
+          console.error("update good categoryName fail", g._id, e);
+        }
+      }
+      return { success: true, message: "已更新" };
     }
-    const { data: list } = await col.where({ parentId: "" }).limit(500).get();
-    if (isCategoryNameDuplicate(list, name, id)) {
-      return { success: false, errMsg: "分类名称已存在" };
+    const parentId = doc.data.parentId;
+    const { data: siblings } = await col.where({ parentId }).limit(500).get();
+    if (isCategoryNameDuplicate(siblings, name, id)) {
+      return { success: false, errMsg: "该大类下已有同名子分类" };
     }
     await col.doc(id).update({ data: { name } });
-    const { data: goodsList } = await db.collection("goods").where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
-    const goodsCol = db.collection("goods");
+    const { data: goodsList } = await goodsCol.where({ categoryL2Id: id }).field({ _id: true }).limit(500).get();
     for (const g of goodsList || []) {
       try {
-        await goodsCol.doc(g._id).update({ data: { categoryName: name } });
+        await goodsCol.doc(g._id).update({ data: { categoryL2Name: name } });
       } catch (e) {
-        console.error("update good categoryName fail", g._id, e);
+        console.error("update good categoryL2Name fail", g._id, e);
       }
     }
     return { success: true, message: "已更新" };
@@ -345,7 +409,7 @@ const updateCategory = async (event) => {
   }
 };
 
-// 删除一级大类：将该类下商品改为未分类，再删除分类
+// 删除二级：清空商品的 categoryL2；删除一级：先删所有子分类，再将商品归为未分类
 const deleteCategory = async (event) => {
   try {
     const id = String(event.id || "").trim();
@@ -353,6 +417,7 @@ const deleteCategory = async (event) => {
       return { success: false, errMsg: "缺少分类 id" };
     }
     const col = db.collection("categories");
+    const goodsCol = db.collection("goods");
     let catDoc;
     try {
       catDoc = await col.doc(id).get();
@@ -362,16 +427,49 @@ const deleteCategory = async (event) => {
     if (!catDoc.data) {
       return { success: false, errMsg: "分类不存在" };
     }
-    if (catDoc.data.parentId !== "" && catDoc.data.parentId != null) {
-      return { success: false, errMsg: "仅支持删除一级大类" };
+    const isL1 = !catDoc.data.parentId || catDoc.data.parentId === "";
+    if (!isL1) {
+      const { data: goodsL2 } = await goodsCol.where({ categoryL2Id: id }).field({ _id: true }).limit(500).get();
+      for (const g of goodsL2 || []) {
+        try {
+          await goodsCol.doc(g._id).update({
+            data: { categoryL2Id: "", categoryL2Name: "" },
+          });
+        } catch (e) {
+          console.error("clear L2 on good", g._id, e);
+        }
+      }
+      await col.doc(id).remove();
+      return { success: true, message: "已删除子分类" };
     }
-    // 将该类下商品逐条改为未分类（兼容云数据库 where.update 限制）
-    const { data: goodsList } = await db.collection("goods").where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
-    const goodsCol = db.collection("goods");
+    const { data: children } = await col.where({ parentId: id }).limit(500).get();
+    for (const child of children || []) {
+      const { data: goodsL2 } = await goodsCol.where({ categoryL2Id: child._id }).field({ _id: true }).limit(500).get();
+      for (const g of goodsL2 || []) {
+        try {
+          await goodsCol.doc(g._id).update({
+            data: { categoryL2Id: "", categoryL2Name: "" },
+          });
+        } catch (e) {
+          console.error("clear L2 on good", g._id, e);
+        }
+      }
+      try {
+        await col.doc(child._id).remove();
+      } catch (e) {
+        console.error("remove child cat", child._id, e);
+      }
+    }
+    const { data: goodsList } = await goodsCol.where({ categoryL1Id: id }).field({ _id: true }).limit(500).get();
     for (const g of goodsList || []) {
       try {
         await goodsCol.doc(g._id).update({
-          data: { categoryL1Id: "", categoryName: "" },
+          data: {
+            categoryL1Id: "",
+            categoryName: "",
+            categoryL2Id: "",
+            categoryL2Name: "",
+          },
         });
       } catch (e) {
         console.error("update good fail", g._id, e);
@@ -559,6 +657,10 @@ exports.main = async (event, context) => {
       return await addCategory(event);
     case "getCategories":
       return await getCategories();
+    case "getCategoriesTree":
+      return await getCategoriesTree();
+    case "addSubCategory":
+      return await addSubCategory(event);
     case "deleteCategory":
       return await deleteCategory(event);
     case "updateCategory":

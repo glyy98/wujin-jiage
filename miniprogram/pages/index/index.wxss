@@ -124,6 +124,38 @@ page {
   font-weight: 500;
 }
 
+.sub-nav-scroll {
+  flex-shrink: 0;
+  width: 100%;
+  white-space: nowrap;
+  margin: 16rpx 24rpx 0;
+  box-sizing: border-box;
+}
+
+.sub-nav-inner {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 16rpx;
+  padding-bottom: 4rpx;
+}
+
+.sub-chip {
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  font-size: 24rpx;
+  color: #666;
+  background: #fff;
+  border-radius: 999rpx;
+  border: 1rpx solid #e5e5e5;
+}
+
+.sub-chip.active {
+  color: #1a5fb4;
+  background: #e8f2fe;
+  border-color: #1a5fb4;
+  font-weight: 500;
+}
+
 .product-scroll {
   flex: 1;
   min-height: 0;

@@ -4,12 +4,12 @@
     <view class="form-item cat-filter-item">
       <text class="label">所属大类</text>
       <view class="cat-filter-row">
-        <picker mode="selector" range="{{categoryList}}" range-key="name" value="{{categoryIndex}}" bindchange="onCategoryChange">
-          <view class="cat-filter-box">
+        <view class="cat-filter-picker-wrap">
+          <view class="cat-filter-box" bindtap="onOpenCategoryModal" hover-class="cat-filter-hover" hover-stay-time="100">
             <text class="cat-filter-text {{categoryList.length && categoryList[categoryIndex] ? '' : 'placeholder'}}">{{categoryList.length && categoryList[categoryIndex] ? categoryList[categoryIndex].name : '请选择分类'}}</text>
             <text class="cat-filter-arrow">▼</text>
           </view>
-        </picker>
+        </view>
         <navigator class="link-manage" url="/pages/categoryManage/categoryManage">管理分类</navigator>
       </view>
       <view class="cat-filter-hint">请选择分类</view>
@@ -21,6 +21,23 @@
           bindinput="onNewCategoryInput"
         />
         <button class="custom-cat-btn" size="mini" type="default" bindtap="onAddCategory" disabled="{{addingCategory}}">添加并选用</button>
+      </view>
+      <text class="label sub-cat-label">二级分类（选填）</text>
+      <view class="cat-filter-sub-wrap">
+        <view class="cat-filter-box" bindtap="onOpenSubCategoryModal" hover-class="cat-filter-hover" hover-stay-time="100">
+          <text class="cat-filter-text {{subCategoryPickerRange.length > 1 ? '' : 'placeholder'}}">{{subCategoryPickerRange[subCategoryIndex] ? subCategoryPickerRange[subCategoryIndex].name : '无二级'}}</text>
+          <text class="cat-filter-arrow">▼</text>
+        </view>
+      </view>
+      <view class="cat-filter-hint">先选大类；无子分类时选「无二级（仅大类）」</view>
+      <view class="custom-cat custom-sub-cat">
+        <input
+          class="input custom-cat-input"
+          placeholder="没有合适的二级？输入新名称"
+          value="{{newSubCategoryName}}"
+          bindinput="onNewSubCategoryInput"
+        />
+        <button class="custom-cat-btn" size="mini" type="default" bindtap="onAddSubCategory" disabled="{{addingSubCategory}}">添加并选用</button>
       </view>
     </view>
     <view class="form-item">
@@ -40,35 +57,24 @@
       <view class="supplier-blocks">
         <view class="supplier-block" wx:for="{{supplierList}}" wx:for-index="supplierIndex" wx:key="supplierIndex">
           <view class="supplier-block-head">
-            <picker
-              mode="selector"
-              range="{{supplierOptions}}"
-              value="{{item.supplierOptionIndex >= 0 && item.supplierOptionIndex < supplierOptions.length ? item.supplierOptionIndex : 0}}"
-              data-supplier-index="{{supplierIndex}}"
-              bindchange="onSupplierPickerChange"
-            >
-              <view class="supplier-filter-box">
+            <view class="supplier-picker-wrap">
+              <view
+                class="supplier-filter-box"
+                data-supplier-index="{{supplierIndex}}"
+                bindtap="onOpenSupplierModal"
+                hover-class="cat-filter-hover"
+                hover-stay-time="100"
+              >
                 <text class="supplier-filter-text {{item.supplierName ? '' : 'placeholder'}}">{{item.supplierName || '请选择供应商'}}</text>
                 <text class="supplier-filter-arrow">▼</text>
               </view>
-            </picker>
+            </view>
             <view
               class="supplier-block-del"
               data-supplier-index="{{supplierIndex}}"
               bindtap="onRemoveSupplier"
               wx:if="{{supplierList.length > 1}}"
             >删除</view>
-          </view>
-          <view class="supplier-filter-hint">请选择供应商</view>
-          <view class="supplier-new-row">
-            <input
-              class="input supplier-new-input"
-              placeholder="或输入新供应商名称"
-              value="{{item.supplierName}}"
-              data-supplier-index="{{supplierIndex}}"
-              bindinput="onSupplierNameInput"
-              bindblur="onSupplierNameBlur"
-            />
           </view>
           <view class="sku-head">
             <text class="label-inline">规格明细</text>
@@ -139,5 +145,55 @@
     <view class="btn-wrap">
       <button class="save-btn" type="primary" bindtap="onSave" loading="{{saving}}">保存</button>
     </view>
+  </view>
+
+  <!-- 所属大类：底部弹层列表（替代原生 picker，避免点击无反应） -->
+  <view class="cat-select-mask" wx:if="{{showCategoryModal}}" catchtap="closeCategoryModal" catchtouchmove="preventTouchMove"></view>
+  <view class="cat-select-sheet" wx:if="{{showCategoryModal}}">
+    <view class="cat-select-title">选择大类</view>
+    <scroll-view scroll-y class="cat-select-scroll">
+      <view
+        class="cat-select-item"
+        wx:for="{{categoryList}}"
+        wx:key="_id"
+        data-index="{{index}}"
+        bindtap="onSelectCategoryFromModal"
+      >{{item.name}}</view>
+    </scroll-view>
+    <view class="cat-select-cancel" bindtap="closeCategoryModal">取消</view>
+  </view>
+
+  <!-- 二级分类：底部弹层 -->
+  <view class="cat-select-mask" wx:if="{{showSubCategoryModal}}" catchtap="closeSubCategoryModal" catchtouchmove="preventTouchMove"></view>
+  <view class="cat-select-sheet" wx:if="{{showSubCategoryModal}}">
+    <view class="cat-select-title">二级分类（选填）</view>
+    <scroll-view scroll-y class="cat-select-scroll">
+      <view
+        class="cat-select-item"
+        wx:for="{{subCategoryPickerRange}}"
+        wx:for-index="subIdx"
+        wx:key="name"
+        data-index="{{subIdx}}"
+        bindtap="onSelectSubCategoryFromModal"
+      >{{item.name}}</view>
+    </scroll-view>
+    <view class="cat-select-cancel" bindtap="closeSubCategoryModal">取消</view>
+  </view>
+
+  <!-- 供应商：底部弹层 -->
+  <view class="cat-select-mask" wx:if="{{showSupplierModal}}" catchtap="closeSupplierModal" catchtouchmove="preventTouchMove"></view>
+  <view class="cat-select-sheet" wx:if="{{showSupplierModal}}">
+    <view class="cat-select-title">选择供应商</view>
+    <scroll-view scroll-y class="cat-select-scroll">
+      <view
+        class="cat-select-item"
+        wx:for="{{supplierOptions}}"
+        wx:for-index="optIdx"
+        wx:key="*this"
+        data-index="{{optIdx}}"
+        bindtap="onSelectSupplierFromModal"
+      >{{item}}</view>
+    </scroll-view>
+    <view class="cat-select-cancel" bindtap="closeSupplierModal">取消</view>
   </view>
 </view>

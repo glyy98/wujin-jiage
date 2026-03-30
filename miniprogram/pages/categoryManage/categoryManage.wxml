@@ -2,58 +2,101 @@
   <view class="search-bar">
     <input
       class="search-input"
-      placeholder="搜索分类名称"
+      placeholder="搜索一级或二级分类名称"
       value="{{keyword}}"
       bindinput="onSearchInput"
       bindconfirm="onSearch"
     />
     <view class="search-btn" bindtap="onSearch">搜索</view>
-    <view class="btn-add" bindtap="onAdd">新增分类</view>
+    <view class="btn-add" bindtap="onAdd">新增一级</view>
   </view>
-  <view class="tip">删除后，该分类下的商品会变为「未分类」，仅在首页「全部」中显示。</view>
-  <view class="list" wx:if="{{filteredList.length > 0}}">
-    <view class="item" wx:for="{{filteredList}}" wx:key="_id">
-      <view class="item-body">
-        <view class="item-label">分类名称</view>
-        <view class="name">{{item.name}}</view>
+  <view class="tip">删除一级会同时删除其下所有二级分类；仅删除二级时，商品仅去掉该子类标记。</view>
+
+  <view class="tree" wx:if="{{filteredTree.length > 0}}">
+    <view class="l1-block" wx:for="{{filteredTree}}" wx:key="_id">
+      <view class="item l1-item">
+        <view class="item-body">
+          <view class="item-label">一级分类</view>
+          <view class="name">{{item.name}}</view>
+        </view>
+        <view class="item-actions">
+          <button
+            class="btn-sub"
+            size="mini"
+            data-parent-id="{{item._id}}"
+            data-parent-name="{{item.name}}"
+            bindtap="onAddSub"
+            disabled="{{deletingId !== null}}"
+          >添加子类</button>
+          <button
+            class="btn-edit"
+            size="mini"
+            data-id="{{item._id}}"
+            data-name="{{item.name}}"
+            data-level="1"
+            bindtap="onEdit"
+            disabled="{{deletingId !== null}}"
+          >编辑</button>
+          <button
+            class="btn-del"
+            size="mini"
+            data-id="{{item._id}}"
+            data-name="{{item.name}}"
+            data-level="1"
+            bindtap="onDelete"
+            loading="{{deletingId === item._id}}"
+            disabled="{{deletingId !== null}}"
+          >删除</button>
+        </view>
       </view>
-      <view class="item-actions">
-        <button
-          class="btn-edit"
-          size="mini"
-          data-id="{{item._id}}"
-          data-name="{{item.name}}"
-          bindtap="onEdit"
-          disabled="{{deletingId !== null}}"
-        >编辑</button>
-        <button
-          class="btn-del"
-          size="mini"
-          data-id="{{item._id}}"
-          data-name="{{item.name}}"
-          bindtap="onDelete"
-          loading="{{deletingId === item._id}}"
-          disabled="{{deletingId !== null}}"
-        >删除</button>
+      <view class="l2-wrap" wx:if="{{item.children && item.children.length > 0}}">
+        <view class="item l2-item" wx:for="{{item.children}}" wx:for-item="sub" wx:key="_id">
+          <view class="item-body">
+            <view class="item-label">二级分类</view>
+            <view class="name">{{sub.name}}</view>
+          </view>
+          <view class="item-actions">
+            <button
+              class="btn-edit"
+              size="mini"
+              data-id="{{sub._id}}"
+              data-name="{{sub.name}}"
+              data-level="2"
+              bindtap="onEdit"
+              disabled="{{deletingId !== null}}"
+            >编辑</button>
+            <button
+              class="btn-del"
+              size="mini"
+              data-id="{{sub._id}}"
+              data-name="{{sub.name}}"
+              data-level="2"
+              bindtap="onDelete"
+              loading="{{deletingId === sub._id}}"
+              disabled="{{deletingId !== null}}"
+            >删除</button>
+          </view>
+        </view>
       </view>
     </view>
   </view>
+
   <view class="empty" wx:elif="{{!loading}}">
-    <text>{{keyword ? "未找到匹配的分类" : "暂无分类，点击上方「新增分类」添加"}}</text>
+    <text>{{keyword ? "未找到匹配的分类" : "暂无分类，点击「新增一级」添加"}}</text>
   </view>
   <view class="loading" wx:if="{{loading}}">加载中...</view>
 
-  <!-- 编辑分类弹窗 -->
   <view class="modal-mask" wx:if="{{showEditModal}}" catchtap="closeEditModal"></view>
-  <view class="modal-wrap" wx:if="{{showEditModal}}">
+  <view class="modal-wrap" wx:if="{{showEditModal}}" catchtouchmove="preventTouchMove">
     <view class="modal-box">
-      <view class="modal-title">编辑分类</view>
+      <view class="modal-title">{{editIsL2 ? '编辑二级分类' : '编辑一级分类'}}</view>
       <input
         class="modal-input"
         placeholder="请输入分类名称"
         value="{{editName}}"
         bindinput="onEditNameInput"
-        focus="{{showEditModal}}"
+        adjust-position="{{true}}"
+        hold-keyboard="{{true}}"
       />
       <view class="modal-btns">
         <view class="modal-btn cancel" bindtap="closeEditModal">取消</view>
@@ -62,21 +105,41 @@
     </view>
   </view>
 
-  <!-- 新增分类弹窗 -->
   <view class="modal-mask" wx:if="{{showAddModal}}" catchtap="closeAddModal"></view>
-  <view class="modal-wrap" wx:if="{{showAddModal}}">
+  <view class="modal-wrap" wx:if="{{showAddModal}}" catchtouchmove="preventTouchMove">
     <view class="modal-box">
-      <view class="modal-title">新增分类</view>
+      <view class="modal-title">新增一级分类</view>
       <input
         class="modal-input"
         placeholder="请输入分类名称"
         value="{{addName}}"
         bindinput="onAddNameInput"
-        focus="{{showAddModal}}"
+        adjust-position="{{true}}"
+        hold-keyboard="{{true}}"
       />
       <view class="modal-btns">
         <view class="modal-btn cancel" bindtap="closeAddModal">取消</view>
         <view class="modal-btn confirm" bindtap="submitAdd">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="modal-mask" wx:if="{{showAddSubModal}}" catchtap="closeAddSubModal"></view>
+  <view class="modal-wrap" wx:if="{{showAddSubModal}}" catchtouchmove="preventTouchMove">
+    <view class="modal-box">
+      <view class="modal-title">添加二级分类</view>
+      <view class="modal-sub">所属一级：{{addSubParentName}}</view>
+      <input
+        class="modal-input"
+        placeholder="请输入二级分类名称"
+        value="{{addSubName}}"
+        bindinput="onAddSubNameInput"
+        adjust-position="{{true}}"
+        hold-keyboard="{{true}}"
+      />
+      <view class="modal-btns">
+        <view class="modal-btn cancel" bindtap="closeAddSubModal">取消</view>
+        <view class="modal-btn confirm" bindtap="submitAddSub">确定</view>
       </view>
     </view>
   </view>

@@ -6,10 +6,16 @@ const db = wx.cloud.database();
 Page({
   data: {
     editId: "",
+    categoryTree: [],
     categoryList: [],
     categoryIndex: 0,
+    subCategoryList: [],
+    subCategoryIndex: 0,
+    subCategoryPickerRange: [{ name: "无二级（仅大类）" }],
     newCategoryName: "",
     addingCategory: false,
+    newSubCategoryName: "",
+    addingSubCategory: false,
     name: "",
     supplierOptions: ["请选择供应商"],
     supplierList: [
@@ -17,6 +23,12 @@ Page({
     ],
     imageList: [],
     saving: false,
+    /** 所属大类 / 二级分类 / 供应商：底部弹层代替原生 picker */
+    showCategoryModal: false,
+    showSubCategoryModal: false,
+    showSupplierModal: false,
+    /** 当前正在选供应商的 supplierList 下标 */
+    supplierModalBlockIndex: 0,
   },
 
   onLoad(options) {
@@ -26,15 +38,29 @@ Page({
       wx.setNavigationBarTitle({ title: "编辑商品" });
     }
     wx.cloud
-      .callFunction({ name: "quickstartFunctions", data: { type: "getCategories" } })
+      .callFunction({ name: "quickstartFunctions", data: { type: "getCategoriesTree" } })
       .then((res) => {
         const result = res.result || {};
-        const list = result.list || [];
-        this.setData({ categoryList: list });
+        const tree = result.list || [];
+        const list = tree.map((n) => ({ _id: n._id, name: n.name, children: n.children || [] }));
+        const subList = list.length ? list[0].children || [] : [];
+        this.setData({
+          categoryTree: tree,
+          categoryList: list,
+          subCategoryList: subList,
+          subCategoryIndex: 0,
+          subCategoryPickerRange: [{ name: "无二级（仅大类）" }, ...subList],
+        });
         if (editId) this.loadProduct(editId, list);
       })
       .catch(() => {
-        this.setData({ categoryList: [] });
+        this.setData({
+          categoryTree: [],
+          categoryList: [],
+          subCategoryList: [],
+          subCategoryIndex: 0,
+          subCategoryPickerRange: [{ name: "无二级（仅大类）" }],
+        });
         if (editId) this.loadProduct(editId, []);
       });
     this.refreshSupplierOptions();
@@ -42,6 +68,10 @@ Page({
 
   onShow() {
     this.refreshSupplierOptions();
+  },
+
+  onHide() {
+    this.setData({ showCategoryModal: false, showSubCategoryModal: false, showSupplierModal: false });
   },
 
   refreshSupplierOptions() {
@@ -77,9 +107,18 @@ Page({
         if (!p) return;
         const list = categoryList.length ? categoryList : this.data.categoryList;
         let categoryIndex = 0;
+        let subCategoryIndex = 0;
+        let subCategoryList = [];
         if (p.categoryL1Id && list.length) {
           const i = list.findIndex((c) => c._id === p.categoryL1Id);
-          if (i >= 0) categoryIndex = i;
+          if (i >= 0) {
+            categoryIndex = i;
+            subCategoryList = list[i].children || [];
+            if (p.categoryL2Id && subCategoryList.length) {
+              const j = subCategoryList.findIndex((c) => c._id === p.categoryL2Id);
+              if (j >= 0) subCategoryIndex = j + 1;
+            }
+          }
         }
         let supplierList = [];
         if (p.supplierList && Array.isArray(p.supplierList) && p.supplierList.length > 0) {
@@ -127,12 +166,18 @@ Page({
           const idx = merged.indexOf(name);
           return { ...sup, supplierOptionIndex: idx >= 0 ? idx : 0 };
         });
+        const subPicker = [{ name: "无二级（仅大类）" }, ...subCategoryList];
+        const maxIdx = Math.max(0, subPicker.length - 1);
+        const safeSubIdx = Math.min(Math.max(0, subCategoryIndex), maxIdx);
         this.setData({
           name: p.name || "",
           supplierOptions: merged,
           supplierList,
           imageList: p.images || (p.image ? [p.image] : []),
           categoryIndex,
+          subCategoryList,
+          subCategoryIndex: safeSubIdx,
+          subCategoryPickerRange: subPicker,
         });
       })
       .catch(() => {});
@@ -141,46 +186,49 @@ Page({
   onNameInput(e) {
     this.setData({ name: e.detail.value });
   },
-  onSupplierPickerChange(e) {
+  /** 供应商：底部弹层 */
+  onOpenSupplierModal(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
-    const idx = parseInt(e.detail.value, 10);
+    if (Number.isNaN(si)) return;
     const supplierOptions = this.data.supplierOptions || [];
-    const supplierList = this.data.supplierList.slice();
-    if (!supplierList[si]) return;
-    const name = supplierOptions[idx];
-    const supplierName = (name === "请选择供应商" ? "" : name) || "";
-    supplierList[si] = { ...supplierList[si], supplierName, supplierOptionIndex: idx };
-    this.setData({ supplierList });
-  },
-  onSupplierNameInput(e) {
-    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
-    const val = e.detail.value || "";
-    const supplierList = this.data.supplierList.slice();
-    if (!supplierList[si]) return;
-    supplierList[si] = { ...supplierList[si], supplierName: val };
-    this.setData({ supplierList });
-  },
-  onSupplierNameBlur(e) {
-    const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
-    const val = (e.detail.value || "").trim();
-    const supplierList = this.data.supplierList.slice();
-    const supplierOptions = this.data.supplierOptions || [];
-    if (!supplierList[si]) return;
-    if (!val) {
-      supplierList[si] = { ...supplierList[si], supplierOptionIndex: 0 };
-      this.setData({ supplierList });
+    if (!supplierOptions.length) {
+      wx.showToast({ title: "暂无供应商选项", icon: "none" });
       return;
     }
-    let merged = supplierOptions.slice();
-    if (!merged.includes(val)) merged.push(val);
-    const supplierOptionIndex = merged.indexOf(val);
-    supplierList[si] = { ...supplierList[si], supplierName: val, supplierOptionIndex };
-    this.setData({ supplierOptions: merged, supplierList });
-    // 持久化到 suppliers 集合，下次新增商品时筛选框会有该名称
-    wx.cloud.callFunction({
-      name: "quickstartFunctions",
-      data: { type: "addSupplierNames", names: [val] },
-    }).catch(() => {});
+    this.setData({
+      showSupplierModal: true,
+      supplierModalBlockIndex: si,
+      showCategoryModal: false,
+      showSubCategoryModal: false,
+    });
+  },
+
+  closeSupplierModal() {
+    this.setData({ showSupplierModal: false });
+  },
+
+  onSelectSupplierFromModal(e) {
+    const idx = parseInt(e.currentTarget.dataset.index, 10);
+    if (Number.isNaN(idx)) return;
+    const blockIndex = this.data.supplierModalBlockIndex;
+    this.applySupplierOption(blockIndex, idx);
+    this.closeSupplierModal();
+  },
+
+  applySupplierOption(supplierBlockIndex, optionIndex) {
+    const supplierOptions = this.data.supplierOptions || [];
+    const max = Math.max(0, supplierOptions.length - 1);
+    const idx = Math.min(Math.max(0, optionIndex), max);
+    const supplierList = this.data.supplierList.slice();
+    if (!supplierList[supplierBlockIndex]) return;
+    const name = supplierOptions[idx];
+    const supplierName = (name === "请选择供应商" ? "" : name) || "";
+    supplierList[supplierBlockIndex] = {
+      ...supplierList[supplierBlockIndex],
+      supplierName,
+      supplierOptionIndex: idx,
+    };
+    this.setData({ supplierList });
   },
   onSkuSpecInput(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -257,7 +305,8 @@ Page({
     wx.chooseMedia({
       count: left,
       mediaType: ["image"],
-      sourceType: ["album"],
+      // 同时支持「从相册选择」和「拍照」
+      sourceType: ["album", "camera"],
       sizeType: ["compressed"],
       success: (res) => {
         const files = res.tempFiles || [];
@@ -316,8 +365,128 @@ Page({
     this.setData({ imageList });
   },
 
-  onCategoryChange(e) {
-    this.setData({ categoryIndex: parseInt(e.detail.value, 10) });
+  preventTouchMove() {},
+
+  /** 点击「所属大类」打开弹层 */
+  onOpenCategoryModal() {
+    const list = this.data.categoryList || [];
+    if (!list.length) {
+      wx.showToast({ title: "暂无大类，请先在下方添加或去管理分类", icon: "none" });
+      return;
+    }
+    this.setData({ showCategoryModal: true, showSubCategoryModal: false, showSupplierModal: false });
+  },
+
+  closeCategoryModal() {
+    this.setData({ showCategoryModal: false });
+  },
+
+  /** 二级分类 */
+  onOpenSubCategoryModal() {
+    const { categoryList, categoryIndex } = this.data;
+    if (!categoryList.length || !categoryList[categoryIndex]) {
+      wx.showToast({ title: "请先选择所属大类", icon: "none" });
+      return;
+    }
+    const range = this.data.subCategoryPickerRange || [];
+    if (!range.length) {
+      wx.showToast({ title: "暂无二级选项", icon: "none" });
+      return;
+    }
+    this.setData({ showSubCategoryModal: true, showCategoryModal: false, showSupplierModal: false });
+  },
+
+  closeSubCategoryModal() {
+    this.setData({ showSubCategoryModal: false });
+  },
+
+  onSelectSubCategoryFromModal(e) {
+    const idx = parseInt(e.currentTarget.dataset.index, 10);
+    if (Number.isNaN(idx)) return;
+    this.applySubCategoryIndex(idx);
+    this.closeSubCategoryModal();
+  },
+
+  applySubCategoryIndex(idx) {
+    const range = this.data.subCategoryPickerRange || [];
+    const max = Math.max(0, range.length - 1);
+    const clamped = Math.min(Math.max(0, idx), max);
+    this.setData({ subCategoryIndex: clamped });
+  },
+
+  onSelectCategoryFromModal(e) {
+    const idx = parseInt(e.currentTarget.dataset.index, 10);
+    if (Number.isNaN(idx)) return;
+    this.applyCategoryIndex(idx);
+    this.closeCategoryModal();
+  },
+
+  /** 切换一级分类并刷新二级列表 */
+  applyCategoryIndex(categoryIndex) {
+    const list = this.data.categoryList || [];
+    if (!list.length) return;
+    const idx = Math.min(Math.max(0, categoryIndex), list.length - 1);
+    const node = list[idx];
+    const subCategoryList = node && node.children ? node.children : [];
+    this.setData({
+      categoryIndex: idx,
+      subCategoryList,
+      subCategoryIndex: 0,
+      subCategoryPickerRange: [{ name: "无二级（仅大类）" }, ...subCategoryList],
+    });
+  },
+
+  onNewSubCategoryInput(e) {
+    this.setData({ newSubCategoryName: e.detail.value || "" });
+  },
+
+  /** 在当前一级下新增二级并选用（与「管理分类」里添加子类一致） */
+  onAddSubCategory() {
+    const { categoryList, categoryIndex, newSubCategoryName } = this.data;
+    const parent = categoryList[categoryIndex];
+    if (!parent || !parent._id) {
+      wx.showToast({ title: "请先选择一级分类", icon: "none" });
+      return;
+    }
+    const name = (newSubCategoryName || "").trim();
+    if (!name) {
+      wx.showToast({ title: "请输入二级分类名称", icon: "none" });
+      return;
+    }
+    this.setData({ addingSubCategory: true });
+    wx.cloud
+      .callFunction({
+        name: "quickstartFunctions",
+        data: { type: "addSubCategory", parentId: parent._id, name },
+      })
+      .then((res) => {
+        const result = res.result || {};
+        this.setData({ addingSubCategory: false });
+        if (!result.success) {
+          wx.showToast({ title: result.errMsg || "添加失败", icon: "none" });
+          return;
+        }
+        const newSub = { _id: result.id, name: result.name };
+        const list = this.data.categoryList.slice();
+        const cur = list[categoryIndex];
+        const children = [...(cur.children || []), newSub];
+        list[categoryIndex] = { ...cur, children };
+        const subCategoryList = children;
+        const subCategoryPickerRange = [{ name: "无二级（仅大类）" }, ...subCategoryList];
+        const subCategoryIndex = subCategoryPickerRange.length - 1;
+        this.setData({
+          categoryList: list,
+          subCategoryList,
+          subCategoryIndex,
+          subCategoryPickerRange,
+          newSubCategoryName: "",
+        });
+        wx.showToast({ title: "已添加并选用", icon: "success" });
+      })
+      .catch((err) => {
+        this.setData({ addingSubCategory: false });
+        wx.showToast({ title: err.message || "添加失败", icon: "none" });
+      });
   },
 
   onNewCategoryInput(e) {
@@ -344,11 +513,14 @@ Page({
           this.setData({ addingCategory: false });
           return;
         }
-        const newCat = { _id: result.id, name: result.name };
+        const newCat = { _id: result.id, name: result.name, children: [] };
         const list = [...this.data.categoryList, newCat];
         this.setData({
           categoryList: list,
           categoryIndex: list.length - 1,
+          subCategoryList: [],
+          subCategoryIndex: 0,
+          subCategoryPickerRange: [{ name: "无二级（仅大类）" }],
           newCategoryName: "",
           addingCategory: false,
         });
@@ -363,7 +535,16 @@ Page({
   },
 
   onSave() {
-    const { editId, name, supplierList, imageList, categoryList, categoryIndex } = this.data;
+    const {
+      editId,
+      name,
+      supplierList,
+      imageList,
+      categoryList,
+      categoryIndex,
+      subCategoryList,
+      subCategoryIndex,
+    } = this.data;
     if (!name || !name.trim()) {
       wx.showToast({ title: "请输入商品名称", icon: "none" });
       return;
@@ -389,12 +570,18 @@ Page({
     const cat = categoryList[categoryIndex];
     const categoryL1Id = cat ? cat._id : "";
     const categoryName = cat ? cat.name : "";
+    const subIdx = subCategoryIndex > 0 ? subCategoryIndex - 1 : -1;
+    const sub = subIdx >= 0 && subCategoryList[subIdx] ? subCategoryList[subIdx] : null;
+    const categoryL2Id = sub ? sub._id : "";
+    const categoryL2Name = sub ? sub.name : "";
     const firstSup = list[0];
     const firstSku = (firstSup.skuList && firstSup.skuList[0]) || {};
     this.setData({ saving: true });
     const payload = {
       categoryL1Id,
       categoryName,
+      categoryL2Id,
+      categoryL2Name,
       name: (name || "").trim(),
       supplierList: list,
       supplier: firstSup.supplierName,
