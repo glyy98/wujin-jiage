@@ -1,4 +1,7 @@
 // goodsList/goodsList.js - 从云数据库 goods 集合读取商品列表
+const MINI_DB_PAGE_SIZE = 20;
+const MAX_FETCH_COUNT = 9999;
+
 Page({
   data: {
     list: [],
@@ -132,13 +135,8 @@ Page({
 
   loadList() {
     this.setData({ loading: true });
-    wx.cloud
-      .database()
-      .collection("goods")
-      .limit(100)
-      .get()
-      .then((res) => {
-        const raw = res.data || [];
+    this.fetchAllGoods(MAX_FETCH_COUNT)
+      .then((raw) => {
         const list = raw.map((item) => ({ ...item, _id: item._id != null ? String(item._id) : item._id }));
         this.setData({
           list,
@@ -156,5 +154,34 @@ Page({
           icon: "none",
         });
       });
+  },
+
+  // 小程序端单次查询有上限，这里按 20 条循环拉取，最多取 maxCount 条
+  fetchAllGoods(maxCount) {
+    const col = wx.cloud.database().collection("goods");
+    const all = [];
+    const fetch = (skip) =>
+      col
+        .skip(skip)
+        .limit(MINI_DB_PAGE_SIZE)
+        .get()
+        .then((res) => {
+          const chunk = res.data || [];
+          all.push(...chunk);
+          if (chunk.length < MINI_DB_PAGE_SIZE || all.length >= maxCount) {
+            return all.slice(0, maxCount);
+          }
+          return fetch(skip + chunk.length);
+        });
+    return fetch(0);
+  },
+
+  onPreviewImage(e) {
+    const url = e.currentTarget.dataset.url;
+    if (!url) return;
+    wx.previewImage({
+      current: url,
+      urls: [url],
+    });
   },
 });

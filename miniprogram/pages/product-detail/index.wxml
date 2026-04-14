@@ -2,23 +2,17 @@
 <view class="container" wx:if="{{product}}">
   <view class="cover-wrap">
     <swiper
-      wx:if="{{product.images && product.images.length > 0}}"
+      wx:if="{{displayImages && displayImages.length > 0}}"
       class="cover-swiper"
       indicator-dots="{{true}}"
       indicator-color="rgba(255,255,255,0.5)"
       indicator-active-color="#fff"
       autoplay="{{false}}"
     >
-      <swiper-item wx:for="{{product.images}}" wx:key="*this">
-        <image class="cover-img" src="{{item}}" mode="aspectFill" />
+      <swiper-item wx:for="{{displayImages}}" wx:key="*this">
+        <image class="cover-img" src="{{item}}" mode="aspectFit" data-index="{{index}}" bindtap="onPreviewImage" />
       </swiper-item>
     </swiper>
-    <image
-      wx:elif="{{product.image}}"
-      class="cover-img"
-      src="{{product.image}}"
-      mode="aspectFill"
-    />
     <view wx:else class="cover-img cover-placeholder">暂无图片</view>
   </view>
   <view class="card info-card">
@@ -45,15 +39,6 @@
       </view>
       <view class="spec-section">
         <text class="spec-section-title">选择规格</text>
-        <view class="spec-chips" wx:if="{{currentSkuList.length > 0}}">
-          <view
-            class="spec-chip {{selectedSkuIndex === index ? 'active' : ''}}"
-            wx:for="{{currentSkuList}}"
-            wx:key="index"
-            data-index="{{index}}"
-            bindtap="onSelectSku"
-          >{{item.specName || '规格' + (index + 1)}}</view>
-        </view>
         <view class="spec-price-panel" wx:if="{{currentSkuList.length > 0 && currentSkuList[selectedSkuIndex]}}">
           <view class="spec-price-row">
             <text class="spec-price-label">来货价</text>
@@ -64,6 +49,15 @@
             <text class="spec-price-value sale">¥{{currentSkuList[selectedSkuIndex].salePrice || '—'}}</text>
           </view>
         </view>
+        <view class="spec-chips" wx:if="{{currentSkuList.length > 0}}">
+          <view
+            class="spec-chip {{selectedSkuIndex === index ? 'active' : ''}}"
+            wx:for="{{currentSkuList}}"
+            wx:key="index"
+            data-index="{{index}}"
+            bindtap="onSelectSku"
+          >{{item.specName || '规格' + (index + 1)}}</view>
+        </view>
       </view>
     </block>
     <block wx:elif="{{product.skuList && product.skuList.length > 0}}">
@@ -73,15 +67,6 @@
       </view>
       <view class="spec-section">
         <text class="spec-section-title">选择规格</text>
-        <view class="spec-chips">
-          <view
-            class="spec-chip {{selectedSkuIndex === index ? 'active' : ''}}"
-            wx:for="{{product.skuList}}"
-            wx:key="index"
-            data-index="{{index}}"
-            bindtap="onSelectSku"
-          >{{item.specName || '规格' + (index + 1)}}</view>
-        </view>
         <view class="spec-price-panel">
           <view class="spec-price-row">
             <text class="spec-price-label">来货价</text>
@@ -91,6 +76,15 @@
             <text class="spec-price-label">售价</text>
             <text class="spec-price-value sale">¥{{product.skuList[selectedSkuIndex].salePrice || '—'}}</text>
           </view>
+        </view>
+        <view class="spec-chips">
+          <view
+            class="spec-chip {{selectedSkuIndex === index ? 'active' : ''}}"
+            wx:for="{{product.skuList}}"
+            wx:key="index"
+            data-index="{{index}}"
+            bindtap="onSelectSku"
+          >{{item.specName || '规格' + (index + 1)}}</view>
         </view>
       </view>
     </block>

@@ -132,25 +132,84 @@ page {
   padding: 0 12rpx;
 }
 
-.custom-cat {
-  margin-top: 16rpx;
+.link-add-cat {
+  flex-shrink: 0;
+  padding: 0 12rpx;
+  font-size: 26rpx;
+  color: #1a5fb4;
+}
+
+.add-cat-modal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+}
+
+.add-cat-modal-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 101;
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  justify-content: center;
+  padding: 40rpx;
+  box-sizing: border-box;
 }
 
-.custom-cat-input {
-  flex: 1;
-  height: 72rpx !important;
-  line-height: 72rpx !important;
-  font-size: 26rpx !important;
+.add-cat-modal-box {
+  position: relative;
+  width: 100%;
+  max-width: 620rpx;
+  background: #fff;
+  border-radius: 18rpx;
+  padding: 32rpx 28rpx;
+  box-sizing: border-box;
 }
 
-.custom-cat-btn {
-  flex-shrink: 0;
-  height: 72rpx;
-  line-height: 72rpx;
-  font-size: 26rpx;
+.add-cat-modal-close {
+  position: absolute;
+  right: 18rpx;
+  top: 14rpx;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  font-size: 42rpx;
+  color: #999;
+}
+
+.add-cat-modal-title {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 24rpx;
+}
+
+.add-cat-modal-input {
+  width: 100%;
+  height: 82rpx;
+  line-height: 82rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background: #f6f7f9;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.add-cat-modal-btn {
+  margin-top: 24rpx;
+  height: 82rpx;
+  line-height: 82rpx;
+  border-radius: 12rpx;
+  font-size: 30rpx;
 }
 
 .custom-sub-cat {
@@ -167,6 +226,37 @@ page {
 
 .supplier-section-head .label {
   margin-bottom: 0;
+}
+
+.sku-image-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+  padding: 16rpx 18rpx;
+  background: #f5f9ff;
+  border: 2rpx solid #dbe9ff;
+  border-radius: 12rpx;
+}
+
+.sku-image-switch-text {
+  flex: 1;
+  min-width: 0;
+  padding-right: 16rpx;
+}
+
+.sku-image-switch-label {
+  display: block;
+  font-size: 28rpx;
+  color: #1f3e6b;
+  font-weight: 500;
+}
+
+.sku-image-switch-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #5f6f86;
 }
 
 .supplier-blocks {
@@ -246,6 +336,12 @@ page {
   color: #666;
 }
 
+.sku-drag-tip {
+  margin-bottom: 12rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
 .btn-add-supplier {
   margin-top: 20rpx;
   padding: 20rpx 0;
@@ -268,40 +364,99 @@ page {
   gap: 20rpx;
 }
 
+.sku-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
 .sku-row {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  flex-wrap: wrap;
+  gap: 10rpx;
+  flex-wrap: nowrap;
   background: #fff;
   border-radius: 12rpx;
-  padding: 16rpx 20rpx;
+  padding: 12rpx 14rpx;
   box-shadow: 0 1rpx 8rpx rgba(0, 0, 0, 0.06);
 }
 
+.sku-order-tag {
+  flex-shrink: 0;
+  width: 30rpx;
+  font-size: 22rpx;
+  color: #666;
+  line-height: 1;
+}
+
 .sku-row .input {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
-  height: 72rpx;
-  line-height: 72rpx;
-  font-size: 26rpx;
+  height: 66rpx;
+  line-height: 66rpx;
+  font-size: 24rpx;
 }
 
 .sku-row .sku-spec {
-  min-width: 120rpx;
+  flex: 1;
+  min-width: 0;
 }
 
 .sku-row .sku-cost,
 .sku-row .sku-sale {
-  min-width: 140rpx;
-  max-width: 180rpx;
+  flex: 0 0 92rpx;
+  min-width: 92rpx;
+  max-width: 92rpx;
+  padding: 0 8rpx;
+  text-align: center;
 }
 
 .sku-del {
   flex-shrink: 0;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #e54545;
-  padding: 0 16rpx;
+  padding: 0 8rpx;
+}
+
+.sku-move {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #1a5fb4;
+  padding: 0 8rpx;
+}
+
+.sku-image-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding-left: 40rpx;
+}
+
+.sku-image-box {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  background: #f0f0f0;
+  border: 2rpx dashed #d5dbe6;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sku-thumb {
+  width: 100%;
+  height: 100%;
+}
+
+.sku-image-add {
+  font-size: 22rpx;
+  color: #7a869a;
+}
+
+.sku-image-del {
+  font-size: 24rpx;
+  color: #e54545;
 }
 
 .form-item .label-tip {

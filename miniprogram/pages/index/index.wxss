@@ -124,32 +124,30 @@ page {
   font-weight: 500;
 }
 
-.sub-nav-scroll {
+.subcat-scroll {
   flex-shrink: 0;
-  width: 100%;
-  white-space: nowrap;
   margin: 16rpx 24rpx 0;
-  box-sizing: border-box;
+  white-space: nowrap;
 }
 
-.sub-nav-inner {
+.subcat-list {
   display: inline-flex;
-  flex-wrap: nowrap;
-  gap: 16rpx;
-  padding-bottom: 4rpx;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 100%;
 }
 
-.sub-chip {
+.subcat-item {
   flex-shrink: 0;
-  padding: 12rpx 24rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
   font-size: 24rpx;
   color: #666;
   background: #fff;
-  border-radius: 999rpx;
-  border: 1rpx solid #e5e5e5;
+  border: 1rpx solid #e6e6e6;
 }
 
-.sub-chip.active {
+.subcat-item.active {
   color: #1a5fb4;
   background: #e8f2fe;
   border-color: #1a5fb4;

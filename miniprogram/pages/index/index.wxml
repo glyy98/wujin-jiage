@@ -35,6 +35,17 @@
         />
         <view class="search-btn" bindtap="onSearch">搜索</view>
       </view>
+      <scroll-view class="subcat-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="subcat-list">
+          <view
+            class="subcat-item {{selectedSubCategoryId === item.id ? 'active' : ''}}"
+            wx:for="{{subCategoryList}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="onSelectSubCategory"
+          >{{item.name}}</view>
+        </view>
+      </scroll-view>
 
       <scroll-view wx:if="{{selectedCategoryId && subNavList.length > 0}}" class="sub-nav-scroll" scroll-x enhanced show-scrollbar="{{false}}">
         <view class="sub-nav-inner">
@@ -63,7 +74,9 @@
                   wx:if="{{item.image}}"
                   class="product-img"
                   src="{{item.image}}"
-                  mode="aspectFill"
+                  mode="aspectFit"
+                  data-url="{{item.image}}"
+                  catchtap="onPreviewImage"
                 />
                 <view wx:else class="product-img product-img-placeholder">暂无图片</view>
               </view>

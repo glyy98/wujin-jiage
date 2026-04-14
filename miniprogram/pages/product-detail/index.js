@@ -9,6 +9,7 @@ Page({
     selectedSupplierIndex: 0,
     selectedSkuIndex: 0,
     currentSkuList: [],
+    displayImages: [],
   },
 
   onLoad(options) {
@@ -26,7 +27,8 @@ Page({
     } else if (product && product.skuList && product.skuList.length > 0) {
       selectedSkuIndex = 0;
     }
-    this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList });
+    const displayImages = this.getDisplayImages(product, selectedSupplierIndex, selectedSkuIndex, currentSkuList);
+    this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList, displayImages });
     if (product) {
       wx.setNavigationBarTitle({
         title: product.name || "商品详情",
@@ -59,7 +61,8 @@ Page({
         } else if (product.skuList && product.skuList.length > 0) {
           selectedSkuIndex = 0;
         }
-        this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList });
+        const displayImages = this.getDisplayImages(product, selectedSupplierIndex, selectedSkuIndex, currentSkuList);
+        this.setData({ product, selectedSupplierIndex, selectedSkuIndex, currentSkuList, displayImages });
         wx.setNavigationBarTitle({ title: product.name || "商品详情" });
       })
       .catch(() => {
@@ -72,17 +75,55 @@ Page({
     if (Number.isNaN(index) || index < 0) return;
     const product = this.data.product;
     const currentSkuList = (product.supplierList && product.supplierList[index]) ? (product.supplierList[index].skuList || []) : [];
+    const selectedSkuIndex = 0;
+    const displayImages = this.getDisplayImages(product, index, selectedSkuIndex, currentSkuList);
     this.setData({
       selectedSupplierIndex: index,
-      selectedSkuIndex: 0,
+      selectedSkuIndex,
       currentSkuList,
+      displayImages,
     });
   },
 
   onSelectSku(e) {
     const index = parseInt(e.currentTarget.dataset.index, 10);
     if (Number.isNaN(index) || index < 0) return;
-    this.setData({ selectedSkuIndex: index });
+    const product = this.data.product;
+    const displayImages = this.getDisplayImages(
+      product,
+      this.data.selectedSupplierIndex,
+      index,
+      this.data.currentSkuList
+    );
+    this.setData({ selectedSkuIndex: index, displayImages });
+  },
+
+  onPreviewImage(e) {
+    const index = parseInt(e.currentTarget.dataset.index, 10) || 0;
+    const urls = (this.data.displayImages || []).filter(Boolean);
+    if (!urls.length) return;
+    const safeIndex = Math.max(0, Math.min(index, urls.length - 1));
+    wx.previewImage({
+      current: urls[safeIndex],
+      urls,
+    });
+  },
+
+  getDisplayImages(product, selectedSupplierIndex, selectedSkuIndex, currentSkuList) {
+    if (!product) return [];
+    let selectedSku = null;
+    if (product.supplierList && product.supplierList.length > 0) {
+      const list = currentSkuList || (product.supplierList[selectedSupplierIndex] && product.supplierList[selectedSupplierIndex].skuList) || [];
+      selectedSku = list[selectedSkuIndex] || null;
+    } else if (product.skuList && product.skuList.length > 0) {
+      selectedSku = product.skuList[selectedSkuIndex] || null;
+    }
+    if (product.useSkuImages && selectedSku && selectedSku.image) {
+      return [selectedSku.image];
+    }
+    if (product.images && product.images.length > 0) return product.images;
+    if (product.image) return [product.image];
+    return [];
   },
 
   onEdit() {

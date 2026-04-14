@@ -41,7 +41,9 @@ module.exports.isSelected = isSelected;
           wx:if="{{item.image}}"
           class="product-img"
           src="{{item.image}}"
-          mode="aspectFill"
+          mode="aspectFit"
+          data-url="{{item.image}}"
+          catchtap="onPreviewImage"
         />
         <view wx:else class="product-img product-img-placeholder">暂无图片</view>
       </view>
