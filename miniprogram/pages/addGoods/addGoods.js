@@ -303,7 +303,7 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ["image"],
-      sourceType: ["album"],
+      sourceType: ["album", "camera"],
       sizeType: ["compressed"],
       success: (res) => {
         const file = (res.tempFiles || [])[0];
@@ -430,7 +430,7 @@ Page({
     wx.chooseMedia({
       count: left,
       mediaType: ["image"],
-      sourceType: ["album"],
+      sourceType: ["album", "camera"],
       sizeType: ["compressed"],
       success: (res) => {
         const files = res.tempFiles || [];
