@@ -7,6 +7,36 @@ const ALL_ID = "";
 const MINI_DB_PAGE_SIZE = 20;
 const MAX_FETCH_COUNT = 9999;
 
+function getFirstSku(item) {
+  const suppliers = item.supplierList;
+  if (Array.isArray(suppliers) && suppliers.length) {
+    const skus = suppliers[0].skuList;
+    if (Array.isArray(skus) && skus.length) return skus[0];
+  }
+  if (Array.isArray(item.skuList) && item.skuList.length) return item.skuList[0];
+  return null;
+}
+
+function enrichProductForGrid(item) {
+  const images = item.images;
+  const coverImage =
+    (Array.isArray(images) && images.length && images[0]) || item.image || "";
+  const firstSku = getFirstSku(item);
+  let cardSaleDisplay = "¥—";
+  if (firstSku) {
+    const sp = firstSku.salePrice;
+    if (sp !== undefined && sp !== null && String(sp).trim() !== "") {
+      cardSaleDisplay = `¥${String(sp).trim()}`;
+    }
+  } else {
+    const sp = item.salePrice;
+    if (sp !== undefined && sp !== null && String(sp).trim() !== "") {
+      cardSaleDisplay = `¥${String(sp).trim()}`;
+    }
+  }
+  return { ...item, coverImage, cardSaleDisplay };
+}
+
 Page({
   data: {
     keyword: "",
@@ -75,7 +105,7 @@ Page({
           ...item,
           id: item._id || item.id,
         }));
-        const data = this.filterBySubCategory(raw, subCategoryId);
+        const data = this.filterBySubCategory(raw, subCategoryId).map(enrichProductForGrid);
         const app = getApp();
         app.globalData.productList = data;
         this.setData({
@@ -154,16 +184,7 @@ Page({
   onSearch() {
     const { allProductsInCategory, keyword } = this.data;
     this.setData({
-      productList: this.filterByKeyword(allProductsInCategory, keyword),
-    });
-  },
-
-  onPreviewImage(e) {
-    const url = e.currentTarget.dataset.url;
-    if (!url) return;
-    wx.previewImage({
-      current: url,
-      urls: [url],
+      productList: this.filterByKeyword(allProductsInCategory, keyword).map(enrichProductForGrid),
     });
   },
 

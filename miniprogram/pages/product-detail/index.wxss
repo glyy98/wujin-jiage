@@ -108,11 +108,13 @@ page {
 }
 
 .spec-chip {
-  width: calc((100% - 48rpx) / 4);
-  height: 72rpx;
   box-sizing: border-box;
-  padding: 0 12rpx;
-  display: flex;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-height: 64rpx;
+  height: auto;
+  padding: 14rpx 22rpx;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 26rpx;
@@ -120,11 +122,9 @@ page {
   background: #f5f5f5;
   border-radius: 12rpx;
   border: 2rpx solid transparent;
-  line-height: 1.2;
+  line-height: 1.45;
   text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
 }
 
 .spec-chip.active {

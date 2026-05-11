@@ -69,28 +69,19 @@
               data-id="{{item.id}}"
               bindtap="goDetail"
             >
-              <view class="product-cover">
+              <view class="product-card-cover">
                 <image
-                  wx:if="{{item.image}}"
+                  wx:if="{{item.coverImage}}"
                   class="product-img"
-                  src="{{item.image}}"
-                  mode="aspectFit"
-                  data-url="{{item.image}}"
-                  catchtap="onPreviewImage"
+                  src="{{item.coverImage}}"
+                  mode="aspectFill"
                 />
                 <view wx:else class="product-img product-img-placeholder">暂无图片</view>
               </view>
-              <view class="product-info">
-                <view class="product-name">{{item.name}}</view>
-                <view class="product-spec" wx:if="{{item.spec}}">规格：{{item.spec}}</view>
-                <view class="product-supplier" wx:if="{{item.supplier}}">供应商：{{item.supplier}}</view>
-                <view class="product-prices">
-                  <text class="price-label">售价</text>
-                  <text class="price-sale">¥{{item.salePrice}}</text>
-                  <text class="price-cost">来货价 ¥{{item.costPrice}}</text>
-                </view>
+              <view class="product-card-body">
+                <view class="product-card-title">{{item.name}}</view>
+                <text class="product-card-price">{{item.cardSaleDisplay}}</text>
               </view>
-              <image class="arrow" src="../../images/arrow.svg" mode="aspectFit" />
             </view>
           </view>
 
