@@ -3,6 +3,9 @@ const MAX_IMAGES = 5;
 const SIZE_LIMIT = 3 * 1024 * 1024; // 3M
 const db = wx.cloud.database();
 const DEFAULT_SUPPLIER = "未知";
+const goodsDraft = require("../../utils/goodsDraft.js");
+const formSnapshot = require("../../utils/formSnapshot.js");
+const formHistory = require("../../utils/formHistory.js");
 
 Page({
   data: {
@@ -23,12 +26,17 @@ Page({
     ],
     imageList: [],
     saving: false,
+    canUndo: false,
+    canRedo: false,
   },
 
   onLoad(options) {
     const editId = (options.id || "").trim();
     const presetCategoryL1Id = (options.categoryL1Id || "").trim();
     this._presetCategoryL1Id = presetCategoryL1Id;
+    this._skipDraftSave = false;
+    this._draftPromptShown = false;
+    this._draftCheckDone = false;
     this.setData({ editId });
     if (editId) {
       wx.setNavigationBarTitle({ title: "编辑商品" });
@@ -47,13 +55,242 @@ Page({
         const l1Id = list[categoryIndex] ? list[categoryIndex]._id : "";
         const subCategoryList = this.buildSubCategoryList(tree, l1Id);
         this.setData({ categoryTree: tree, categoryList: list, categoryIndex, subCategoryList, subCategoryIndex: 0 });
-        if (editId) this.loadProduct(editId, list, tree);
+        this.tryRestoreDraft(editId, list, tree);
       })
       .catch(() => {
         this.setData({ categoryTree: [], categoryList: [], subCategoryList: [{ _id: "", name: "全部（可不选）" }], subCategoryIndex: 0 });
-        if (editId) this.loadProduct(editId, [], []);
+        this.tryRestoreDraft(editId, [], []);
       });
     this.refreshSupplierOptions();
+  },
+
+  onHide() {
+    if (this._skipDraftSave || !this._draftCheckDone) return;
+    if (this.isDirty()) {
+      this.persistDraft();
+    }
+  },
+
+  onUnload() {
+    goodsDraft.clearDraft(this.data.editId);
+    if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload();
+  },
+
+  persistDraft() {
+    if (this._skipDraftSave || !this._draftCheckDone) return;
+    const draft = goodsDraft.collectDraftFromPage(this.data);
+    goodsDraft.saveDraft(draft);
+  },
+
+  scheduleDraftSave() {
+    if (this._skipDraftSave) return;
+    clearTimeout(this._draftSaveTimer);
+    this._draftSaveTimer = setTimeout(() => this.persistDraft(), 400);
+    this.scheduleHistoryPush();
+  },
+
+  scheduleHistoryPush() {
+    if (this._historyPaused || !this._formHistory) return;
+    clearTimeout(this._historyPushTimer);
+    this._historyPushTimer = setTimeout(() => {
+      if (this._historyPaused || !this._formHistory) return;
+      const snap = formSnapshot.takeSnapshot(this.data);
+      this._formHistory.recordChange(snap);
+      this.updateHistoryUi();
+      this.syncLeaveGuard();
+    }, 500);
+  },
+
+  initFormBaseline() {
+    const snap = formSnapshot.takeSnapshot(this.data);
+    this._baselineSnapshot = formSnapshot.cloneSnapshot(snap);
+    if (!this._formHistory) {
+      this._formHistory = formHistory.createHistory();
+    }
+    this._formHistory.reset(this._baselineSnapshot);
+    this.updateHistoryUi();
+    this.syncLeaveGuard();
+  },
+
+  updateHistoryUi() {
+    const canUndo = this._formHistory ? this._formHistory.canUndo() : false;
+    const canRedo = this._formHistory ? this._formHistory.canRedo() : false;
+    if (canUndo !== this.data.canUndo || canRedo !== this.data.canRedo) {
+      this.setData({ canUndo, canRedo });
+    }
+  },
+
+  isDirty() {
+    if (!this._baselineSnapshot) return false;
+    return !formSnapshot.isSnapshotEqual(formSnapshot.takeSnapshot(this.data), this._baselineSnapshot);
+  },
+
+  syncLeaveGuard() {
+    if (this._skipDraftSave) {
+      if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload();
+      return;
+    }
+    if (this.isDirty() && wx.enableAlertBeforeUnload) {
+      wx.enableAlertBeforeUnload({ message: "当前有未保存的数据，确定离开吗？" });
+    } else if (wx.disableAlertBeforeUnload) {
+      wx.disableAlertBeforeUnload();
+    }
+  },
+
+  onUndo() {
+    if (!this._formHistory || !this._formHistory.canUndo()) {
+      wx.showToast({ title: "没有可撤销的操作", icon: "none" });
+      return;
+    }
+    const snap = this._formHistory.undo();
+    if (snap) this.applyFormSnapshot(snap);
+  },
+
+  onRedo() {
+    if (!this._formHistory || !this._formHistory.canRedo()) {
+      wx.showToast({ title: "没有可恢复撤销的操作", icon: "none" });
+      return;
+    }
+    const snap = this._formHistory.redo();
+    if (snap) this.applyFormSnapshot(snap);
+  },
+
+  buildFormDataFromSnapshot(snapshot) {
+    const tree = this.data.categoryTree || [];
+    const list = this.data.categoryList || [];
+    let categoryIndex = 0;
+    if (snapshot.categoryL1Id && list.length) {
+      const i = list.findIndex((c) => c && c._id === snapshot.categoryL1Id);
+      if (i >= 0) categoryIndex = i;
+    } else if (!this.data.editId && this._presetCategoryL1Id && list.length) {
+      const i = list.findIndex((c) => c && c._id === this._presetCategoryL1Id);
+      if (i >= 0) categoryIndex = i;
+    }
+    const l1Id = list[categoryIndex] ? list[categoryIndex]._id : "";
+    const subCategoryList = this.buildSubCategoryList(tree, l1Id);
+    let subCategoryIndex = 0;
+    if (snapshot.categoryL2Id) {
+      const j = subCategoryList.findIndex((c) => c && c._id === snapshot.categoryL2Id);
+      if (j >= 0) subCategoryIndex = j;
+    }
+    let supplierList = (snapshot.supplierList || []).map((sup) => ({
+      supplierName: (sup.supplierName || "").trim() || DEFAULT_SUPPLIER,
+      skuList:
+        sup.skuList && sup.skuList.length
+          ? sup.skuList.map((s) => ({
+              specName: (s.specName || "").trim(),
+              costPrice: (s.costPrice || "").trim(),
+              salePrice: (s.salePrice || "").trim(),
+              image: goodsDraft.isPersistableImageUrl(s.image) ? String(s.image).trim() : (s.image || "").trim(),
+            }))
+          : [{ specName: "", costPrice: "", salePrice: "", image: "" }],
+    }));
+    if (supplierList.length === 0) {
+      supplierList = [
+        {
+          supplierName: DEFAULT_SUPPLIER,
+          supplierOptionIndex: 0,
+          skuList: [{ specName: "", costPrice: "", salePrice: "", image: "" }],
+        },
+      ];
+    }
+    const supplierOptions = this.data.supplierOptions || [DEFAULT_SUPPLIER];
+    const merged = supplierOptions.slice();
+    supplierList.forEach((sup) => {
+      const name = (sup.supplierName || "").trim();
+      if (name && !merged.includes(name)) merged.push(name);
+    });
+    const normalized = [DEFAULT_SUPPLIER, ...merged.filter((n) => n && n !== DEFAULT_SUPPLIER)];
+    supplierList = supplierList.map((sup) => {
+      const name = (sup.supplierName || "").trim() || DEFAULT_SUPPLIER;
+      const idx = normalized.indexOf(name);
+      return { ...sup, supplierName: name, supplierOptionIndex: idx >= 0 ? idx : 0 };
+    });
+    return {
+      categoryIndex,
+      subCategoryList,
+      subCategoryIndex,
+      name: snapshot.name || "",
+      useSkuImages: !!snapshot.useSkuImages,
+      supplierOptions: normalized,
+      supplierList,
+      imageList: snapshot.imageList || [],
+    };
+  },
+
+  applyFormSnapshot(snapshot, done) {
+    this._historyPaused = true;
+    const patch = this.buildFormDataFromSnapshot(snapshot);
+    this.setData(patch, () => {
+      this._historyPaused = false;
+      this.updateHistoryUi();
+      this.syncLeaveGuard();
+      if (!this._skipDraftSave && this._draftCheckDone) this.persistDraft();
+      if (done) done();
+    });
+  },
+
+  tryRestoreDraft(editId, categoryList, categoryTree) {
+    const draft = goodsDraft.loadDraft(editId);
+    if (!draft || !goodsDraft.hasMeaningfulDraft(draft)) {
+      this._draftCheckDone = true;
+      if (editId) {
+        this.loadProduct(editId, categoryList, categoryTree, () => this.initFormBaseline());
+      } else {
+        this.initFormBaseline();
+      }
+      return;
+    }
+    this.promptDraftRestore(draft, () => {
+      if (editId) this.loadProduct(editId, categoryList, categoryTree, () => this.initFormBaseline());
+    });
+  },
+
+  promptDraftRestore(draft, onDiscard) {
+    if (this._draftPromptShown) return;
+    this._draftPromptShown = true;
+    const isEdit = !!this.data.editId;
+    wx.showModal({
+      title: "未保存的草稿",
+      content: isEdit
+        ? "检测到未保存的修改，是否继续编辑？"
+        : "检测到未保存的草稿，是否继续编辑上次内容？",
+      confirmText: "继续编辑",
+      cancelText: isEdit ? "放弃修改" : "重新填写",
+      success: (res) => {
+        this._draftCheckDone = true;
+        if (res.confirm) {
+          this.applyDraft(draft);
+        } else {
+          goodsDraft.clearDraft(this.data.editId);
+          if (onDiscard) onDiscard();
+          else this.initFormBaseline();
+        }
+      },
+      fail: () => {
+        this._draftCheckDone = true;
+        if (onDiscard) onDiscard();
+        else this.initFormBaseline();
+      },
+    });
+  },
+
+  applyDraft(draft) {
+    const rawImages = draft.imageList || [];
+    const snapshot = {
+      categoryL1Id: draft.categoryL1Id || "",
+      categoryL2Id: draft.categoryL2Id || "",
+      name: draft.name || "",
+      useSkuImages: !!draft.useSkuImages,
+      supplierList: draft.supplierList || [],
+      imageList: goodsDraft.filterPersistableImages(rawImages),
+    };
+    this.applyFormSnapshot(snapshot, () => {
+      if (rawImages.length > snapshot.imageList.length) {
+        wx.showToast({ title: "部分图片已失效，请重新上传", icon: "none" });
+      }
+      this.initFormBaseline();
+    });
   },
 
   onShow() {
@@ -129,13 +366,16 @@ Page({
       });
   },
 
-  loadProduct(id, categoryList, categoryTree) {
+  loadProduct(id, categoryList, categoryTree, onReady) {
     db.collection("goods")
       .doc(id)
       .get()
       .then((res) => {
         const p = res.data;
-        if (!p) return;
+        if (!p) {
+          if (onReady) onReady();
+          return;
+        }
         const list = categoryList.length ? categoryList : this.data.categoryList;
         let categoryIndex = 0;
         if (p.categoryL1Id && list.length) {
@@ -200,22 +440,30 @@ Page({
           const j = subCategoryList.findIndex((c) => c && c._id === l2Id);
           if (j >= 0) subCategoryIndex = j;
         }
-        this.setData({
-          name: p.name || "",
-          supplierOptions: normalized,
-          useSkuImages: !!p.useSkuImages,
-          supplierList,
-          imageList: p.images || (p.image ? [p.image] : []),
-          categoryIndex,
-          subCategoryList,
-          subCategoryIndex,
-        });
+        this.setData(
+          {
+            name: p.name || "",
+            supplierOptions: normalized,
+            useSkuImages: !!p.useSkuImages,
+            supplierList,
+            imageList: p.images || (p.image ? [p.image] : []),
+            categoryIndex,
+            subCategoryList,
+            subCategoryIndex,
+          },
+          () => {
+            if (onReady) onReady();
+          }
+        );
       })
-      .catch(() => {});
+      .catch(() => {
+        if (onReady) onReady();
+      });
   },
 
   onNameInput(e) {
     this.setData({ name: e.detail.value });
+    this.scheduleDraftSave();
   },
   onSupplierPickerChange(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -227,6 +475,7 @@ Page({
     const supplierName = name || DEFAULT_SUPPLIER;
     supplierList[si] = { ...supplierList[si], supplierName, supplierOptionIndex: idx };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onSupplierNameInput(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -235,6 +484,7 @@ Page({
     if (!supplierList[si]) return;
     supplierList[si] = { ...supplierList[si], supplierName: val };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onSupplierNameBlur(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -245,6 +495,7 @@ Page({
     if (!val) {
       supplierList[si] = { ...supplierList[si], supplierName: DEFAULT_SUPPLIER, supplierOptionIndex: 0 };
       this.setData({ supplierList });
+      this.scheduleDraftSave();
       return;
     }
     let merged = supplierOptions.slice();
@@ -253,6 +504,7 @@ Page({
     const supplierOptionIndex = merged.indexOf(val);
     supplierList[si] = { ...supplierList[si], supplierName: val, supplierOptionIndex };
     this.setData({ supplierOptions: merged, supplierList });
+    this.scheduleDraftSave();
     // 持久化到 suppliers 集合，下次新增商品时筛选框会有该名称
     wx.cloud.callFunction({
       name: "quickstartFunctions",
@@ -269,6 +521,7 @@ Page({
     skuList[skuIndex] = { ...skuList[skuIndex], specName: val };
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onSkuCostInput(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -280,6 +533,7 @@ Page({
     skuList[skuIndex] = { ...skuList[skuIndex], costPrice: val };
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onSkuSaleInput(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -291,9 +545,11 @@ Page({
     skuList[skuIndex] = { ...skuList[skuIndex], salePrice: val };
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onToggleSkuImageMode(e) {
     this.setData({ useSkuImages: !!e.detail.value });
+    this.scheduleDraftSave();
   },
   onChooseSkuImage(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -324,6 +580,7 @@ Page({
             skuList[skuIndex] = { ...skuList[skuIndex], image: up.fileID };
             list[si] = { ...list[si], skuList };
             this.setData({ supplierList: list });
+            this.scheduleDraftSave();
           },
           fail: () => {
             wx.showToast({ title: "上传失败", icon: "none" });
@@ -351,6 +608,7 @@ Page({
     skuList[skuIndex] = { ...skuList[skuIndex], image: "" };
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onAddSku(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -359,12 +617,14 @@ Page({
     const skuList = (supplierList[si].skuList || []).concat([{ specName: "", costPrice: "", salePrice: "", image: "" }]);
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onAddSupplier() {
     const supplierList = this.data.supplierList.concat([
       { supplierName: DEFAULT_SUPPLIER, supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "", image: "" }] },
     ]);
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onRemoveSku(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -375,6 +635,7 @@ Page({
     if (skuList.length === 0) skuList = [{ specName: "", costPrice: "", salePrice: "", image: "" }];
     supplierList[si] = { ...supplierList[si], skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
   onRemoveSupplier(e) {
     const si = parseInt(e.currentTarget.dataset.supplierIndex, 10);
@@ -383,6 +644,7 @@ Page({
       supplierList = [{ supplierName: DEFAULT_SUPPLIER, supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "", image: "" }] }];
     }
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
 
   onMoveSku(e) {
@@ -419,6 +681,7 @@ Page({
     skuList.splice(toIndex, 0, moved);
     supplierList[supplierIndex] = { ...sup, skuList };
     this.setData({ supplierList });
+    this.scheduleDraftSave();
   },
 
   onChooseImage() {
@@ -468,6 +731,7 @@ Page({
           if (done === total) {
             wx.hideLoading();
             this.setData({ imageList: list });
+            this.scheduleDraftSave();
           }
         },
         fail: (err) => {
@@ -476,6 +740,7 @@ Page({
           if (done === total) {
             wx.hideLoading();
             this.setData({ imageList: list });
+            this.scheduleDraftSave();
             wx.showToast({ title: "部分图片上传失败", icon: "none" });
           }
         },
@@ -487,6 +752,7 @@ Page({
     const index = e.currentTarget.dataset.index;
     const imageList = this.data.imageList.filter((_, i) => i !== index);
     this.setData({ imageList });
+    this.scheduleDraftSave();
   },
 
   onPreviewImage(e) {
@@ -505,10 +771,12 @@ Page({
     const l1Id = list[categoryIndex] ? list[categoryIndex]._id : "";
     const subCategoryList = this.buildSubCategoryList(this.data.categoryTree || [], l1Id);
     this.setData({ categoryIndex, subCategoryList, subCategoryIndex: 0 });
+    this.scheduleDraftSave();
   },
 
   onSubCategoryChange(e) {
     this.setData({ subCategoryIndex: parseInt(e.detail.value, 10) });
+    this.scheduleDraftSave();
   },
 
   onNewCategoryInput(e) {
@@ -558,6 +826,7 @@ Page({
           showAddCategoryModal: false,
           addingCategory: false,
         });
+        this.scheduleDraftSave();
         wx.showToast({ title: result.message || "已添加并选用", icon: "success" });
       })
       .catch((err) => {
@@ -620,21 +889,51 @@ Page({
     };
     const supplierNamesToSave = list.map((sup) => sup.supplierName).filter(Boolean);
     const afterSave = () => {
+      goodsDraft.clearDraft(editId);
       wx.cloud.callFunction({
         name: "quickstartFunctions",
         data: { type: "addSupplierNames", names: supplierNamesToSave },
       }).catch(() => {});
     };
+    const onSaveSuccess = (stayOnPage) => {
+      afterSave();
+      this.setData({ saving: false });
+      wx.showToast({ title: "保存成功", icon: "success" });
+      if (stayOnPage) {
+        this.setData(
+          {
+            categoryIndex: 0,
+            subCategoryList: this.buildSubCategoryList(
+              this.data.categoryTree || [],
+              (this.data.categoryList[0] && this.data.categoryList[0]._id) || ""
+            ),
+            subCategoryIndex: 0,
+            name: "",
+            useSkuImages: false,
+            supplierList: [
+              {
+                supplierName: DEFAULT_SUPPLIER,
+                supplierOptionIndex: 0,
+                skuList: [{ specName: "", costPrice: "", salePrice: "", image: "" }],
+              },
+            ],
+            imageList: [],
+          },
+          () => {
+            this.initFormBaseline();
+          }
+        );
+      } else {
+        this._skipDraftSave = true;
+        this.syncLeaveGuard();
+        setTimeout(() => wx.navigateBack(), 400);
+      }
+    };
     if (editId) {
       db.collection("goods")
         .doc(editId)
         .update({ data: payload })
-        .then(() => {
-          afterSave();
-          this.setData({ saving: false });
-          wx.showToast({ title: "保存成功", icon: "success" });
-          setTimeout(() => wx.navigateBack(), 400);
-        })
+        .then(() => onSaveSuccess(false))
         .catch((err) => {
           this.setData({ saving: false });
           console.error("保存失败", err);
@@ -648,20 +947,7 @@ Page({
             createTime: db.serverDate(),
           },
         })
-        .then(() => {
-          afterSave();
-          this.setData({ saving: false });
-          wx.showToast({ title: "保存成功", icon: "success" });
-          this.setData({
-            categoryIndex: 0,
-            subCategoryList: this.buildSubCategoryList(this.data.categoryTree || [], (this.data.categoryList[0] && this.data.categoryList[0]._id) || ""),
-            subCategoryIndex: 0,
-            name: "",
-            useSkuImages: false,
-            supplierList: [{ supplierName: DEFAULT_SUPPLIER, supplierOptionIndex: 0, skuList: [{ specName: "", costPrice: "", salePrice: "", image: "" }] }],
-            imageList: [],
-          });
-        })
+        .then(() => onSaveSuccess(true))
         .catch((err) => {
           this.setData({ saving: false });
           console.error("保存失败", err);

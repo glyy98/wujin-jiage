@@ -1,5 +1,9 @@
 <!--addGoods/addGoods.wxml - 新增五金商品-->
 <view class="container">
+  <view class="form-toolbar">
+    <view class="toolbar-btn {{canUndo ? '' : 'disabled'}}" bindtap="onUndo">↩ 撤销</view>
+    <view class="toolbar-btn {{canRedo ? '' : 'disabled'}}" bindtap="onRedo">↪ 恢复撤销</view>
+  </view>
   <view class="form-card">
     <view class="form-item cat-filter-item">
       <text class="label">所属大类</text>
